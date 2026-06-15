@@ -1,0 +1,13 @@
+DROP TABLE IF EXISTS forum.permissions    CASCADE;
+DROP TABLE IF EXISTS forum.user_profiles  CASCADE;
+DROP TABLE IF EXISTS forum.ranks          CASCADE;
+DROP TABLE IF EXISTS forum.read_markers   CASCADE;
+DROP TABLE IF EXISTS forum.subscriptions  CASCADE;
+DROP TABLE IF EXISTS forum.reports        CASCADE;
+DROP TABLE IF EXISTS forum.moderators     CASCADE;
+DROP TABLE IF EXISTS forum.attachments    CASCADE;
+DROP TABLE IF EXISTS forum.posts          CASCADE;
+DROP TABLE IF EXISTS forum.topics         CASCADE;
+DROP TABLE IF EXISTS forum.forums         CASCADE;
+DROP TABLE IF EXISTS forum.categories     CASCADE;
+DROP FUNCTION IF EXISTS forum.set_updated_at() CASCADE;
