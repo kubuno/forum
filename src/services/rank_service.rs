@@ -92,13 +92,51 @@ impl RankService {
     pub async fn update_signature(user_id: Uuid, dto: UpdateProfileDto, db: &PgPool) -> Result<UserProfile> {
         Self::get_profile(user_id, db).await?; // ensure the row exists
         let p = sqlx::query_as::<_, UserProfile>(
-            "UPDATE forum.user_profiles SET signature_md = $2 WHERE user_id = $1 RETURNING *",
+            "UPDATE forum.user_profiles SET
+                signature_md = COALESCE($2, signature_md),
+                bio_md       = COALESCE($3, bio_md),
+                location     = COALESCE($4, location),
+                website      = COALESCE($5, website),
+                custom_title = COALESCE($6, custom_title)
+             WHERE user_id = $1 RETURNING *",
         )
         .bind(user_id)
         .bind(&dto.signature_md)
+        .bind(&dto.bio_md)
+        .bind(&dto.location)
+        .bind(&dto.website)
+        .bind(&dto.custom_title)
         .fetch_one(db)
         .await?;
         Ok(p)
+    }
+
+    /// Bump a user's topic counter (called when they open a new topic).
+    pub async fn bump_topic_count(conn: &mut PgConnection, user_id: Uuid, delta: i32) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO forum.user_profiles (user_id, topic_count)
+             VALUES ($1, GREATEST($2, 0))
+             ON CONFLICT (user_id) DO UPDATE
+                SET topic_count = GREATEST(forum.user_profiles.topic_count + $2, 0)",
+        )
+        .bind(user_id)
+        .bind(delta)
+        .execute(&mut *conn)
+        .await?;
+        Ok(())
+    }
+
+    /// Recent posts authored by a user (their public activity feed).
+    pub async fn activity(user_id: Uuid, limit: i64, db: &PgPool) -> Result<Vec<crate::models::post::Post>> {
+        let rows = sqlx::query_as::<_, crate::models::post::Post>(
+            "SELECT * FROM forum.posts WHERE author_id = $1 AND is_deleted = FALSE
+             ORDER BY created_at DESC LIMIT $2",
+        )
+        .bind(user_id)
+        .bind(limit.clamp(1, 50))
+        .fetch_all(db)
+        .await?;
+        Ok(rows)
     }
 
     /// Bump a user's post counter (in a transaction) and refresh their rank.

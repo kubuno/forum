@@ -62,7 +62,14 @@ pub async fn delete(
 
 pub async fn get_profile(State(state): State<AppState>, Path(uid): Path<Uuid>) -> Result<Json<Value>> {
     let profile = RankService::get_profile(uid, &state.db).await?;
-    Ok(Json(json!({ "profile": profile })))
+    let topics = crate::services::topic_service::TopicService::by_author(uid, 10, &state.db).await?;
+    Ok(Json(json!({ "profile": profile, "topics": topics })))
+}
+
+/// GET /profiles/:uid/activity — a user's recent posts.
+pub async fn activity(State(state): State<AppState>, Path(uid): Path<Uuid>) -> Result<Json<Value>> {
+    let posts = RankService::activity(uid, 20, &state.db).await?;
+    Ok(Json(json!({ "posts": posts })))
 }
 
 pub async fn my_profile(

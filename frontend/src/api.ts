@@ -24,6 +24,10 @@ export interface Forum {
   last_post_id: string | null
   last_post_at: string | null
   last_post_user_id: string | null
+  color: string | null
+  icon: string | null
+  is_readonly: boolean
+  rules_md: string | null
   created_at: string
   updated_at: string
 }
@@ -45,6 +49,10 @@ export interface Topic {
   last_post_id: string | null
   last_post_at: string | null
   last_post_user_id: string | null
+  is_solved: boolean
+  solution_post_id: string | null
+  is_question: boolean
+  prefix: string | null
   created_at: string
   updated_at: string
 }
@@ -62,6 +70,8 @@ export interface Post {
   edited_by: string | null
   edit_reason: string | null
   edit_count: number
+  is_deleted: boolean
+  like_count: number
   created_at: string
   updated_at: string
 }
@@ -115,6 +125,14 @@ export interface UserProfile {
   post_count: number
   rank_id: string | null
   signature_md: string | null
+  bio_md: string | null
+  location: string | null
+  website: string | null
+  custom_title: string | null
+  likes_received: number
+  likes_given: number
+  topic_count: number
+  last_seen_at: string | null
   created_at: string
   updated_at: string
 }
@@ -160,6 +178,52 @@ export interface UserBrief {
   avatar_url: string | null
 }
 
+export interface EmojiAgg { emoji: string; count: number; me: boolean }
+
+export interface ForumNotification {
+  id: string
+  kind: string
+  actor_id: string | null
+  topic_id: string | null
+  post_id: string | null
+  extra: string | null
+  is_read: boolean
+  created_at: string
+}
+
+export interface Draft {
+  id: string
+  forum_id: string | null
+  topic_id: string | null
+  title: string | null
+  body_md: string
+  updated_at: string
+}
+
+export interface Tag { id: string; name: string; slug: string; color: string; topic_count: number; created_at: string }
+
+export interface PollOptionResult { id: string; text: string; votes: number; me: boolean }
+export interface PollResults {
+  poll: { id: string; topic_id: string; question: string; is_multiple: boolean; closes_at: string | null; created_at: string }
+  options: PollOptionResult[]
+  total_voters: number
+  has_voted: boolean
+  is_closed: boolean
+}
+export interface NewPoll { question: string; is_multiple: boolean; closes_at?: string | null; options: string[] }
+
+export interface ForumStats {
+  categories: number; forums: number; topics: number; posts: number
+  members: number; reactions: number; online: number; latest_member: string | null
+}
+export interface ModLogEntry {
+  id: number; moderator_id: string; action: string
+  forum_id: string | null; topic_id: string | null; post_id: string | null
+  target_user_id: string | null; details: string | null; created_at: string
+}
+export interface Warning { id: string; user_id: string; moderator_id: string; reason: string; created_at: string }
+export interface Ban { user_id: string; banned_by: string; reason: string | null; until: string | null; created_at: string }
+
 // ── Client ────────────────────────────────────────────────────────────────────
 
 const qs = (q: Record<string, unknown>) => {
@@ -199,7 +263,7 @@ export const forumApi = {
   // Topics
   listTopics: (forumId: string, q: { limit?: number; offset?: number } = {}) =>
     apiClient.get<{ topics: Topic[]; total: number }>(`/forum/forums/${forumId}/topics${qs(q)}`).then(r => r.data),
-  createTopic: (forumId: string, body: { title: string; body_md: string; topic_type?: TopicType }) =>
+  createTopic: (forumId: string, body: { title: string; body_md: string; topic_type?: TopicType; is_question?: boolean; prefix?: string; tag_ids?: string[]; poll?: NewPoll }) =>
     apiClient.post<{ topic: Topic; post: Post }>(`/forum/forums/${forumId}/topics`, body).then(r => r.data),
   getTopic: (id: string) =>
     apiClient.get<{ topic: Topic; permissions: ForumPerms }>(`/forum/topics/${id}`).then(r => r.data),
@@ -224,7 +288,7 @@ export const forumApi = {
     apiClient.get<{ posts: Post[]; total: number }>(`/forum/topics/${topicId}/posts${qs(q)}`).then(r => r.data),
   getPost: (id: string) =>
     apiClient.get<{ post: Post }>(`/forum/posts/${id}`).then(r => r.data.post),
-  createPost: (topicId: string, body: { body_md: string; reply_to_post_id?: string | null }) =>
+  createPost: (topicId: string, body: { body_md: string; reply_to_post_id?: string | null; mention_user_ids?: string[] }) =>
     apiClient.post<{ post: Post }>(`/forum/topics/${topicId}/posts`, body).then(r => r.data.post),
   updatePost: (id: string, body: { body_md: string; edit_reason?: string }) =>
     apiClient.patch<{ post: Post }>(`/forum/posts/${id}`, body).then(r => r.data.post),
@@ -275,6 +339,78 @@ export const forumApi = {
   // Search
   search: (q: string, opts: { limit?: number; offset?: number } = {}) =>
     apiClient.get<{ results: SearchHit[] }>(`/forum/search${qs({ q, ...opts })}`).then(r => r.data.results),
+
+  // Reactions
+  react: (postId: string, emoji: string) =>
+    apiClient.post<{ added: boolean; reactions: EmojiAgg[] }>(`/forum/posts/${postId}/react`, { emoji }).then(r => r.data),
+  topicReactions: (topicId: string) =>
+    apiClient.get<{ reactions: Record<string, EmojiAgg[]> }>(`/forum/topics/${topicId}/reactions`).then(r => r.data.reactions),
+
+  // Solution
+  setSolution: (topicId: string, postId: string) =>
+    apiClient.post<{ topic: Topic }>(`/forum/topics/${topicId}/solution`, { post_id: postId }).then(r => r.data.topic),
+  clearSolution: (topicId: string) =>
+    apiClient.delete<{ topic: Topic }>(`/forum/topics/${topicId}/solution`).then(r => r.data.topic),
+
+  // Bookmarks
+  toggleBookmark: (topicId: string) =>
+    apiClient.post<{ bookmarked: boolean }>(`/forum/topics/${topicId}/bookmark`, {}).then(r => r.data.bookmarked),
+  listBookmarks: () =>
+    apiClient.get<{ topics: Topic[] }>('/forum/me/bookmarks').then(r => r.data.topics),
+
+  // Notifications
+  listNotifications: (unread = false) =>
+    apiClient.get<{ notifications: ForumNotification[]; unread: number }>('/forum/me/notifications', { params: { unread } }).then(r => r.data),
+  markNotifications: (id?: string) =>
+    apiClient.post<{ unread: number }>('/forum/me/notifications/read', { id: id ?? null }).then(r => r.data.unread),
+
+  // Drafts
+  saveDraft: (body: { forum_id?: string; topic_id?: string; title?: string; body_md: string }) =>
+    apiClient.put<{ draft: Draft | null }>('/forum/me/drafts', body).then(r => r.data.draft),
+  listDrafts: () => apiClient.get<{ drafts: Draft[] }>('/forum/me/drafts').then(r => r.data.drafts),
+  deleteDraft: (id: string) => apiClient.delete(`/forum/me/drafts/${id}`).then(() => undefined),
+
+  // Tags
+  listTags: () => apiClient.get<{ tags: Tag[] }>('/forum/tags').then(r => r.data.tags),
+  createTag: (name: string, color?: string) =>
+    apiClient.post<{ tag: Tag }>('/forum/tags', { name, color }).then(r => r.data.tag),
+  deleteTag: (id: string) => apiClient.delete(`/forum/tags/${id}`).then(() => undefined),
+  topicTags: (topicId: string) => apiClient.get<{ tags: Tag[] }>(`/forum/topics/${topicId}/tags`).then(r => r.data.tags),
+  setTopicTags: (topicId: string, tagIds: string[]) =>
+    apiClient.put<{ tags: Tag[] }>(`/forum/topics/${topicId}/tags`, { tag_ids: tagIds }).then(r => r.data.tags),
+
+  // Polls
+  getPoll: (topicId: string) =>
+    apiClient.get<{ poll: PollResults | null }>(`/forum/topics/${topicId}/poll`).then(r => r.data.poll),
+  votePoll: (pollId: string, optionIds: string[]) =>
+    apiClient.post<{ poll: PollResults }>(`/forum/polls/${pollId}/vote`, { option_ids: optionIds }).then(r => r.data.poll),
+
+  // Discovery
+  feed: (kind: string, opts: { solved?: boolean; tag?: string; limit?: number; offset?: number } = {}) =>
+    apiClient.get<{ topics: Topic[]; tags: Record<string, Tag[]> }>(`/forum/feed${qs({ kind, ...opts })}`).then(r => r.data),
+
+  // Community
+  heartbeat: (path?: string) => apiClient.post('/forum/me/heartbeat', { path }).then(() => undefined),
+  online: () => apiClient.get<{ user_ids: string[] }>('/forum/online').then(r => r.data.user_ids),
+  stats: () => apiClient.get<{ stats: ForumStats }>('/forum/stats').then(r => r.data.stats),
+  members: () => apiClient.get<{ latest: string[]; top: { user_id: string; post_count: number }[] }>('/forum/members').then(r => r.data),
+
+  // Profiles
+  profileActivity: (uid: string) => apiClient.get<{ posts: Post[] }>(`/forum/profiles/${uid}/activity`).then(r => r.data.posts),
+  updateProfile: (body: { signature_md?: string; bio_md?: string; location?: string; website?: string; custom_title?: string }) =>
+    apiClient.patch<{ profile: UserProfile }>('/forum/me/profile', body).then(r => r.data.profile),
+
+  // Advanced moderation
+  modLog: () => apiClient.get<{ log: ModLogEntry[] }>('/forum/mod/log').then(r => r.data.log),
+  listBans: () => apiClient.get<{ bans: Ban[] }>('/forum/mod/bans').then(r => r.data.bans),
+  warnUser: (uid: string, reason: string) =>
+    apiClient.post<{ warning: Warning }>(`/forum/mod/users/${uid}/warn`, { reason }).then(r => r.data.warning),
+  listWarnings: (uid: string) => apiClient.get<{ warnings: Warning[] }>(`/forum/mod/users/${uid}/warnings`).then(r => r.data.warnings),
+  banUser: (uid: string, reason?: string, days?: number) =>
+    apiClient.post<{ ban: Ban }>(`/forum/mod/users/${uid}/ban`, { reason, days }).then(r => r.data.ban),
+  unbanUser: (uid: string) => apiClient.delete(`/forum/mod/users/${uid}/ban`).then(() => undefined),
+  removePost: (id: string) => apiClient.post(`/forum/posts/${id}/remove`, {}).then(() => undefined),
+  restorePost: (id: string) => apiClient.post<{ ok: boolean }>(`/forum/posts/${id}/restore`, {}).then(() => undefined),
 
   // Users (core directory)
   searchUsers: (q: string) =>

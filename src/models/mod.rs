@@ -1,8 +1,13 @@
 pub mod attachment;
 pub mod category;
+pub mod draft;
 pub mod forum;
 pub mod moderation;
+pub mod notification;
 pub mod permission;
+pub mod poll;
 pub mod post;
 pub mod rank;
+pub mod reaction;
+pub mod tag;
 pub mod topic;

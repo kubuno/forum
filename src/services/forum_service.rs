@@ -58,7 +58,11 @@ impl ForumService {
                 name        = COALESCE($3, name),
                 description = COALESCE($4, description),
                 position    = COALESCE($5, position),
-                is_locked   = COALESCE($6, is_locked)
+                is_locked   = COALESCE($6, is_locked),
+                color       = COALESCE($7, color),
+                icon        = COALESCE($8, icon),
+                is_readonly = COALESCE($9, is_readonly),
+                rules_md    = COALESCE($10, rules_md)
              WHERE id = $1 RETURNING *",
         )
         .bind(id)
@@ -67,6 +71,10 @@ impl ForumService {
         .bind(&dto.description)
         .bind(dto.position)
         .bind(dto.is_locked)
+        .bind(&dto.color)
+        .bind(&dto.icon)
+        .bind(dto.is_readonly)
+        .bind(&dto.rules_md)
         .fetch_optional(db)
         .await?
         .ok_or_else(|| ForumError::NotFound(format!("Forum {id}")))?;

@@ -26,6 +26,9 @@ pub struct CreatePostDto {
     #[validate(length(min = 1, max = 100000))]
     pub body_md:          String,
     pub reply_to_post_id: Option<Uuid>,
+    /// User ids picked by the @mention autocomplete on the client.
+    #[serde(default)]
+    pub mention_user_ids: Vec<Uuid>,
 }
 
 #[derive(Debug, Deserialize, Validate)]

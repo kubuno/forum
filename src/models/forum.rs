@@ -17,6 +17,10 @@ pub struct Forum {
     pub last_post_id:      Option<Uuid>,
     pub last_post_at:      Option<DateTime<Utc>>,
     pub last_post_user_id: Option<Uuid>,
+    pub color:             Option<String>,
+    pub icon:              Option<String>,
+    pub is_readonly:       bool,
+    pub rules_md:          Option<String>,
     pub created_at:        DateTime<Utc>,
     pub updated_at:        DateTime<Utc>,
 }
@@ -42,4 +46,9 @@ pub struct UpdateForumDto {
     pub description:     Option<String>,
     pub position:        Option<i32>,
     pub is_locked:       Option<bool>,
+    pub color:           Option<String>,
+    pub icon:            Option<String>,
+    pub is_readonly:     Option<bool>,
+    #[validate(length(max = 20000))]
+    pub rules_md:        Option<String>,
 }

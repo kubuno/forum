@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ChevronLeft, Lock, MoreHorizontal, Send, Bell, BellOff, Shield, Check, X,
+  Bookmark, CheckCircle2, Trash2,
 } from 'lucide-react'
 import { MenuDropdown, ConfirmDialog, Button, Spinner, type MenuItem } from '@ui'
 import { useConfirm, prompt, useAuthStore } from '@kubuno/sdk'
@@ -13,6 +14,8 @@ import { AuthorName, AuthorAvatar } from './Author'
 import { timeAgo, shortDateTime } from './helpers'
 import PostBody from './PostBody'
 import PostEditor from './PostEditor'
+import ReactionBar from './ReactionBar'
+import PollCard from './PollCard'
 import { AttachPicker, PostAttachments, saveAttachments, type PendingAttachment } from './Attachments'
 import MoveTopicWindow from './MoveTopicWindow'
 import SplitTopicWindow from './SplitTopicWindow'
@@ -55,6 +58,19 @@ export default function TopicView() {
 
   const posts = useMemo(() => postsData?.posts ?? [], [postsData])
   useResolveUsers(posts.map(p => p.author_id))
+
+  const { data: reactions = {} } = useQuery({
+    queryKey: ['forum-reactions', topicId],
+    queryFn: () => forumApi.topicReactions(topicId),
+    enabled: !!topicId,
+  })
+  const { data: topicTags = [] } = useQuery({
+    queryKey: ['forum-topictags', topicId],
+    queryFn: () => forumApi.topicTags(topicId),
+    enabled: !!topicId,
+  })
+  const { data: bookmarks = [] } = useQuery({ queryKey: ['forum-bookmarks'], queryFn: forumApi.listBookmarks })
+  const isBookmarked = bookmarks.some(b => b.id === topicId)
 
   // Mark the topic read up to the latest post once posts are loaded.
   useEffect(() => {
@@ -123,6 +139,19 @@ export default function TopicView() {
     else { await forumApi.subscribeTopic(topicId); setWatching(true) }
   }
 
+  const toggleBookmark = async () => {
+    await forumApi.toggleBookmark(topicId)
+    qc.invalidateQueries({ queryKey: ['forum-bookmarks'] })
+  }
+  const markSolution = async (p: Post) => {
+    if (topic.solution_post_id === p.id) await forumApi.clearSolution(topicId)
+    else await forumApi.setSolution(topicId, p.id)
+    refresh()
+  }
+  const modRemovePost = async (p: Post) => {
+    await forumApi.removePost(p.id); refresh()
+  }
+
   const toggleLock = async () => { await forumApi.lockTopic(topicId, !topic.is_locked); refresh() }
   const togglePin = async () => {
     await forumApi.updateTopic(topicId, { topic_type: topic.topic_type === 'normal' ? 'sticky' : 'normal' })
@@ -146,11 +175,23 @@ export default function TopicView() {
     { type: 'action', label: t('delete_topic'), danger: true, onClick: () => { setHeaderMenu(null); removeTopic() } },
   ]
 
+  const canMarkSolution = topic.author_id === me?.id || isMod
   const postItems = (p: Post): MenuItem[] => {
     const items: MenuItem[] = [{ type: 'action', label: t('quote'), onClick: () => { setPostMenu(null); quote(p) } }]
+    if (canMarkSolution && !p.is_first_post) {
+      items.push({
+        type: 'action',
+        label: topic.solution_post_id === p.id ? t('unmark_solution') : t('mark_solution'),
+        icon: <CheckCircle2 size={15} />,
+        onClick: () => { setPostMenu(null); markSolution(p) },
+      })
+    }
     if (p.author_id === me?.id || isMod) {
       items.push({ type: 'action', label: t('edit'), onClick: () => { setPostMenu(null); setEditingId(p.id); setEditBody(p.body_md) } })
       if (!p.is_first_post) items.push({ type: 'action', label: t('delete'), danger: true, onClick: () => { setPostMenu(null); removePost(p) } })
+    }
+    if (isMod && !p.is_first_post) {
+      items.push({ type: 'action', label: t('mod_remove'), icon: <Trash2 size={15} />, danger: true, onClick: () => { setPostMenu(null); modRemovePost(p) } })
     }
     items.push({ type: 'separator' })
     items.push({ type: 'action', label: t('report'), onClick: () => { setPostMenu(null); reportPost(p) } })
@@ -167,8 +208,17 @@ export default function TopicView() {
           </button>
           <h1 className="text-lg font-semibold text-text-primary flex-1 min-w-0 truncate flex items-center gap-2">
             {topic.is_locked && <Lock size={15} className="text-text-tertiary shrink-0" />}
-            {topic.title}
+            {topic.is_solved && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium bg-success-light text-success shrink-0">
+                <CheckCircle2 size={12} /> {t('solved')}
+              </span>
+            )}
+            {topic.prefix && <span className="px-1.5 py-0.5 rounded text-[11px] font-medium bg-primary-light text-primary shrink-0">{topic.prefix}</span>}
+            <span className="truncate">{topic.title}</span>
           </h1>
+          <button onClick={toggleBookmark} title={t('bookmark')} className="p-2 rounded-lg hover:bg-surface-1 text-text-secondary">
+            <Bookmark size={16} className={isBookmarked ? 'fill-primary text-primary' : ''} />
+          </button>
           <button onClick={toggleWatch} title={watching ? t('unsubscribe') : t('subscribe')} className="p-2 rounded-lg hover:bg-surface-1 text-text-secondary">
             {watching ? <BellOff size={16} /> : <Bell size={16} />}
           </button>
@@ -181,10 +231,23 @@ export default function TopicView() {
 
         {banner && <div className="mb-3 px-3 py-2 rounded-lg bg-success-light text-success text-sm">{banner}</div>}
 
+        {topicTags.length > 0 && (
+          <div className="flex items-center gap-1.5 flex-wrap mb-3">
+            {topicTags.map(tag => (
+              <span key={tag.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
+                style={{ backgroundColor: tag.color + '22', color: tag.color }}>
+                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: tag.color }} />{tag.name}
+              </span>
+            ))}
+          </div>
+        )}
+
+        <PollCard topicId={topicId} />
+
         {/* Posts */}
         <div className="space-y-3">
           {posts.map((p, i) => (
-            <article key={p.id} className={`rounded-xl border bg-surface-0 overflow-hidden ${selectedPosts.has(p.id) ? 'border-primary' : 'border-border'}`}>
+            <article key={p.id} className={`rounded-xl border bg-surface-0 overflow-hidden ${topic.solution_post_id === p.id ? 'border-success' : selectedPosts.has(p.id) ? 'border-primary' : 'border-border'}`}>
               <div className="flex">
                 {/* Author column */}
                 <div className="w-36 shrink-0 bg-surface-1 p-3 border-r border-border hidden sm:flex flex-col items-center text-center gap-1">
@@ -218,8 +281,14 @@ export default function TopicView() {
                     </div>
                   ) : (
                     <>
+                      {topic.solution_post_id === p.id && (
+                        <div className="flex items-center gap-1.5 mb-2 text-xs font-medium text-success">
+                          <CheckCircle2 size={14} /> {t('solution')}
+                        </div>
+                      )}
                       <PostBody body={p.body_md} />
                       <PostAttachments postId={p.id} />
+                      <ReactionBar postId={p.id} initial={reactions[p.id] ?? []} />
                     </>
                   )}
                 </div>

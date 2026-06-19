@@ -13,8 +13,8 @@ use crate::{
     middleware::ForumUser,
     models::post::{CreatePostDto, UpdatePostDto},
     services::{
-        forum_service::ForumService, permission_service::PermissionService,
-        post_service::PostService, topic_service::TopicService,
+        forum_service::ForumService, notification_service::NotificationService,
+        permission_service::PermissionService, post_service::PostService, topic_service::TopicService,
     },
     state::AppState,
     events::publisher,
@@ -49,12 +49,28 @@ pub async fn create(
     if !perms.can_view || !perms.can_reply {
         return Err(ForumError::Forbidden);
     }
-    if (topic.is_locked || forum.is_locked) && !is_mod {
+    if (topic.is_locked || forum.is_locked || forum.is_readonly) && !is_mod {
+        return Err(ForumError::Forbidden);
+    }
+    if !is_mod && crate::services::moderation_service::ModerationService::is_banned(user.id, &state.db).await? {
         return Err(ForumError::Forbidden);
     }
 
+    let reply_to = dto.reply_to_post_id;
+    let mention_ids = dto.mention_user_ids.clone();
     let post = PostService::create(topic_id, topic.forum_id, user.id, dto, &state.db).await?;
     publisher::publish_post_created(&state, post.id, user.id).await;
+
+    // Notify the topic author, the replied-to author and any @mentioned users.
+    NotificationService::notify(&state, topic.author_id, "reply", user.id, topic_id, Some(post.id), None).await;
+    if let Some(rid) = reply_to {
+        if let Ok(parent) = PostService::get(rid, &state.db).await {
+            NotificationService::notify(&state, parent.author_id, "reply", user.id, topic_id, Some(post.id), None).await;
+        }
+    }
+    for uid in mention_ids {
+        NotificationService::notify(&state, uid, "mention", user.id, topic_id, Some(post.id), None).await;
+    }
     Ok((StatusCode::CREATED, Json(json!({ "post": post }))))
 }
 

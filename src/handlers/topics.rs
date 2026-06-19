@@ -47,7 +47,10 @@ pub async fn create(
         return Err(ForumError::Forbidden);
     }
     let is_mod = perms.is_admin || perms.is_moderator;
-    if forum.is_locked && !is_mod {
+    if (forum.is_locked || forum.is_readonly) && !is_mod {
+        return Err(ForumError::Forbidden);
+    }
+    if !is_mod && crate::services::moderation_service::ModerationService::is_banned(user.id, &state.db).await? {
         return Err(ForumError::Forbidden);
     }
 
@@ -198,4 +201,33 @@ pub async fn mark_read(
 ) -> Result<StatusCode> {
     EngagementService::mark_read(user.id, id, dto.last_read_post_id, &state.db).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+// ── Solution (accepted answer) ─────────────────────────────────────────────────
+
+#[derive(Debug, serde::Deserialize)]
+pub struct SolutionDto {
+    pub post_id: Uuid,
+}
+
+pub async fn set_solution(
+    State(state): State<AppState>,
+    Extension(user): Extension<ForumUser>,
+    Path(id): Path<Uuid>,
+    Json(dto): Json<SolutionDto>,
+) -> Result<Json<Value>> {
+    let (topic, post_author) = TopicService::set_solution(id, dto.post_id, &user, &state.db).await?;
+    crate::services::notification_service::NotificationService::notify(
+        &state, post_author, "solution", user.id, id, Some(dto.post_id), None,
+    ).await;
+    Ok(Json(json!({ "topic": topic })))
+}
+
+pub async fn clear_solution(
+    State(state): State<AppState>,
+    Extension(user): Extension<ForumUser>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<Value>> {
+    let topic = TopicService::clear_solution(id, &user, &state.db).await?;
+    Ok(Json(json!({ "topic": topic })))
 }
