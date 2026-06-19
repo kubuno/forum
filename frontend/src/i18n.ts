@@ -631,4 +631,37 @@ const ja = {
   settings: 'フォーラム設定', manage_structure: 'カテゴリとフォーラム', attach: 'ファイルを添付', attachments: '添付ファイル',
 }
 
+// ── New-feature strings (FR + EN authored; other locales fall back to EN) ──
+const featEn = {
+  solved: "Solved", bookmark: "Bookmark", mark_solution: "Mark as solution",
+  unmark_solution: "Unmark solution", solution: "Solution", mod_remove: "Remove (moderation)",
+  poll_closed: "closed", poll_vote: "Vote", poll_voters: "{{count}} voters",
+  notifications: "Notifications", notif_mark_all: "Mark all read", notif_empty: "No notifications",
+  notif_reply: "replied to your topic", notif_mention: "mentioned you",
+  notif_reaction: "reacted to your post", notif_solution: "marked your post as the solution",
+  notif_quote: "quoted you", notif_topic: "posted",
+  discover: "Discover", feed_recent: "Recent", feed_unanswered: "Unanswered",
+  feed_popular: "Popular", feed_unread: "Unread", feed_mine: "My topics",
+  feed_bookmarks: "Bookmarks", feed_empty: "Nothing here yet",
+  stat_online: "{{count}} online", stat_summary: "{{topics}} topics · {{posts}} posts · {{members}} members",
+  add_tag: "Add a tag", question: "Question", a_poll: "Add a poll", poll_option: "Option",
+}
+const featFr = {
+  solved: "Résolu", bookmark: "Marque-page", mark_solution: "Marquer comme solution",
+  unmark_solution: "Retirer la solution", solution: "Solution", mod_remove: "Supprimer (modération)",
+  poll_closed: "clos", poll_vote: "Voter", poll_voters: "{{count}} votants",
+  notifications: "Notifications", notif_mark_all: "Tout marquer comme lu", notif_empty: "Aucune notification",
+  notif_reply: "a répondu à votre sujet", notif_mention: "vous a mentionné",
+  notif_reaction: "a réagi à votre message", notif_solution: "a marqué votre message comme solution",
+  notif_quote: "vous a cité", notif_topic: "a publié",
+  discover: "Découvrir", feed_recent: "Récents", feed_unanswered: "Sans réponse",
+  feed_popular: "Populaires", feed_unread: "Non lus", feed_mine: "Mes sujets",
+  feed_bookmarks: "Marque-pages", feed_empty: "Rien pour l'instant",
+  stat_online: "{{count}} en ligne", stat_summary: "{{topics}} sujets · {{posts}} messages · {{members}} membres",
+  add_tag: "Ajouter une étiquette", question: "Question", a_poll: "Ajouter un sondage", poll_option: "Option",
+}
+Object.assign(en, featEn)
+Object.assign(fr, featFr)
+for (const loc of [es, pt, it, de, el, ru, ar, he, hi, zh, ja]) Object.assign(loc, featEn)
+
 registerModuleTranslations('forum', { en, fr, es, pt, it, de, el, ru, ar, he, hi, zh, ja })

@@ -1,4 +1,4 @@
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, QueryBuilder};
 use uuid::Uuid;
 
 use crate::{
@@ -52,6 +52,65 @@ impl TopicService {
             .ok_or_else(|| ForumError::NotFound(format!("Topic {id}")))
     }
 
+    /// Cross-forum discovery feed. `kind` ∈ recent | unanswered | popular |
+    /// unread | mine. Hidden forums (user role can_view = false) are excluded.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn feed(
+        kind: &str,
+        user_id: Uuid,
+        solved: Option<bool>,
+        tag_id: Option<Uuid>,
+        limit: i64,
+        offset: i64,
+        db: &PgPool,
+    ) -> Result<Vec<Topic>> {
+        let mut qb: QueryBuilder<Postgres> = QueryBuilder::new("SELECT t.* FROM forum.topics t ");
+        if kind == "unread" {
+            qb.push("LEFT JOIN forum.read_markers rm ON rm.topic_id = t.id AND rm.user_id = ");
+            qb.push_bind(user_id);
+            qb.push(" ");
+        }
+        qb.push("WHERE NOT EXISTS (SELECT 1 FROM forum.permissions pm \
+                 WHERE pm.forum_id = t.forum_id AND pm.role = 'user' AND pm.can_view = FALSE) ");
+
+        match kind {
+            "unanswered" => { qb.push("AND t.reply_count = 0 "); }
+            "mine" => { qb.push("AND t.author_id = ").push_bind(user_id).push(" "); }
+            "unread" => { qb.push("AND (rm.user_id IS NULL OR t.last_post_at > rm.read_at) AND t.last_post_at IS NOT NULL "); }
+            _ => {}
+        }
+        if let Some(s) = solved {
+            qb.push("AND t.is_solved = ").push_bind(s).push(" ");
+        }
+        if let Some(tid) = tag_id {
+            qb.push("AND EXISTS (SELECT 1 FROM forum.topic_tags tt WHERE tt.topic_id = t.id AND tt.tag_id = ")
+                .push_bind(tid).push(") ");
+        }
+
+        let order = match kind {
+            "popular" => "ORDER BY (t.view_count + t.reply_count * 3) DESC, t.last_post_at DESC NULLS LAST ",
+            "unanswered" | "mine" => "ORDER BY t.created_at DESC ",
+            _ => "ORDER BY t.last_post_at DESC NULLS LAST, t.created_at DESC ",
+        };
+        qb.push(order);
+        qb.push("LIMIT ").push_bind(limit.clamp(1, 100)).push(" OFFSET ").push_bind(offset.max(0));
+
+        let rows = qb.build_query_as::<Topic>().fetch_all(db).await?;
+        Ok(rows)
+    }
+
+    /// Topics authored by a given user (public profile listing).
+    pub async fn by_author(author_id: Uuid, limit: i64, db: &PgPool) -> Result<Vec<Topic>> {
+        let rows = sqlx::query_as::<_, Topic>(
+            "SELECT * FROM forum.topics WHERE author_id = $1 ORDER BY created_at DESC LIMIT $2",
+        )
+        .bind(author_id)
+        .bind(limit.clamp(1, 100))
+        .fetch_all(db)
+        .await?;
+        Ok(rows)
+    }
+
     pub async fn touch_view(id: Uuid, db: &PgPool) -> Result<()> {
         sqlx::query("UPDATE forum.topics SET view_count = view_count + 1 WHERE id = $1")
             .bind(id)
@@ -70,14 +129,16 @@ impl TopicService {
 
         let mut tx = db.begin().await?;
         let topic = sqlx::query_as::<_, Topic>(
-            "INSERT INTO forum.topics (forum_id, author_id, title, slug, topic_type)
-             VALUES ($1, $2, $3, $4, $5) RETURNING *",
+            "INSERT INTO forum.topics (forum_id, author_id, title, slug, topic_type, is_question, prefix)
+             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *",
         )
         .bind(forum_id)
         .bind(author_id)
         .bind(&dto.title)
         .bind(&slug)
         .bind(topic_type)
+        .bind(dto.is_question)
+        .bind(dto.prefix.as_deref().filter(|s| !s.is_empty()))
         .fetch_one(&mut *tx)
         .await?;
 
@@ -95,6 +156,46 @@ impl TopicService {
         aggregates::recompute_topic(&mut tx, topic.id).await?;
         aggregates::recompute_forum(&mut tx, forum_id).await?;
         RankService::bump_post_count(&mut tx, author_id, 1).await?;
+        RankService::bump_topic_count(&mut tx, author_id, 1).await?;
+
+        // Attach selected tags (only ones that exist).
+        for tag_id in &dto.tag_ids {
+            sqlx::query(
+                "INSERT INTO forum.topic_tags (topic_id, tag_id)
+                 SELECT $1, $2 WHERE EXISTS (SELECT 1 FROM forum.tags WHERE id = $2)
+                 ON CONFLICT DO NOTHING",
+            )
+            .bind(topic.id)
+            .bind(tag_id)
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        // Attach an optional poll.
+        if let Some(poll) = &dto.poll {
+            let opts: Vec<String> = poll.options.iter().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+            if opts.len() >= 2 {
+                let poll_id: Uuid = sqlx::query_scalar(
+                    "INSERT INTO forum.polls (topic_id, question, is_multiple, closes_at)
+                     VALUES ($1, $2, $3, $4) RETURNING id",
+                )
+                .bind(topic.id)
+                .bind(&poll.question)
+                .bind(poll.is_multiple)
+                .bind(poll.closes_at)
+                .fetch_one(&mut *tx)
+                .await?;
+                for (i, opt) in opts.iter().enumerate() {
+                    sqlx::query("INSERT INTO forum.poll_options (poll_id, text, position) VALUES ($1, $2, $3)")
+                        .bind(poll_id)
+                        .bind(opt)
+                        .bind(i as i32)
+                        .execute(&mut *tx)
+                        .await?;
+                }
+            }
+        }
+
         tx.commit().await?;
 
         let topic = Self::get(topic.id, db).await?;
@@ -159,6 +260,49 @@ impl TopicService {
             .fetch_optional(db)
             .await?
             .ok_or_else(|| ForumError::NotFound(format!("Topic {id}")))
+    }
+
+    /// Marks a post as the accepted answer. Only the topic author or a
+    /// moderator/admin may do so. Returns the updated topic and the solution
+    /// post's author (for notification).
+    pub async fn set_solution(id: Uuid, post_id: Uuid, user: &ForumUser, db: &PgPool) -> Result<(Topic, Uuid)> {
+        let topic = Self::get(id, db).await?;
+        let perms = PermissionService::effective(topic.forum_id, user, db).await?;
+        if topic.author_id != user.id && !perms.is_admin && !perms.is_moderator {
+            return Err(ForumError::Forbidden);
+        }
+        let post_author: Option<Uuid> = sqlx::query_scalar(
+            "SELECT author_id FROM forum.posts WHERE id = $1 AND topic_id = $2",
+        )
+        .bind(post_id)
+        .bind(id)
+        .fetch_optional(db)
+        .await?;
+        let post_author = post_author.ok_or_else(|| ForumError::Validation("post is not in this topic".into()))?;
+
+        let topic = sqlx::query_as::<_, Topic>(
+            "UPDATE forum.topics SET is_solved = TRUE, solution_post_id = $2 WHERE id = $1 RETURNING *",
+        )
+        .bind(id)
+        .bind(post_id)
+        .fetch_one(db)
+        .await?;
+        Ok((topic, post_author))
+    }
+
+    pub async fn clear_solution(id: Uuid, user: &ForumUser, db: &PgPool) -> Result<Topic> {
+        let topic = Self::get(id, db).await?;
+        let perms = PermissionService::effective(topic.forum_id, user, db).await?;
+        if topic.author_id != user.id && !perms.is_admin && !perms.is_moderator {
+            return Err(ForumError::Forbidden);
+        }
+        sqlx::query_as::<_, Topic>(
+            "UPDATE forum.topics SET is_solved = FALSE, solution_post_id = NULL WHERE id = $1 RETURNING *",
+        )
+        .bind(id)
+        .fetch_one(db)
+        .await
+        .map_err(ForumError::Database)
     }
 
     pub async fn move_to(id: Uuid, dto: MoveTopicDto, db: &PgPool) -> Result<Topic> {

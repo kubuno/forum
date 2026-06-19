@@ -19,6 +19,10 @@ pub struct Topic {
     pub last_post_id:      Option<Uuid>,
     pub last_post_at:      Option<DateTime<Utc>>,
     pub last_post_user_id: Option<Uuid>,
+    pub is_solved:         bool,
+    pub solution_post_id:  Option<Uuid>,
+    pub is_question:       bool,
+    pub prefix:            Option<String>,
     pub created_at:        DateTime<Utc>,
     pub updated_at:        DateTime<Utc>,
 }
@@ -31,6 +35,23 @@ pub struct CreateTopicDto {
     #[validate(length(min = 1, max = 100000))]
     pub body_md:    String,
     pub topic_type: Option<String>,
+    #[serde(default)]
+    pub is_question: bool,
+    pub prefix:     Option<String>,
+    #[serde(default)]
+    pub tag_ids:    Vec<Uuid>,
+    /// Optional poll attached to the opening topic.
+    pub poll:       Option<CreatePollDto>,
+}
+
+#[derive(Debug, Deserialize, Validate)]
+pub struct CreatePollDto {
+    #[validate(length(min = 1, max = 500))]
+    pub question:    String,
+    #[serde(default)]
+    pub is_multiple: bool,
+    pub closes_at:   Option<DateTime<Utc>>,
+    pub options:     Vec<String>,
 }
 
 #[derive(Debug, Deserialize, Validate)]

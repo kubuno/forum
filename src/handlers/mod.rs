@@ -1,12 +1,20 @@
 pub mod attachments;
+pub mod bookmarks;
 pub mod categories;
+pub mod community;
+pub mod discovery;
+pub mod drafts;
 pub mod forums;
 pub mod health;
 pub mod moderation;
+pub mod notifications;
 pub mod permissions;
+pub mod polls;
 pub mod posts;
 pub mod ranks;
+pub mod reactions;
 pub mod search;
+pub mod tags;
 pub mod topics;
 
 use serde::Deserialize;

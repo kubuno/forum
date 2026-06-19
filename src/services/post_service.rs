@@ -13,7 +13,8 @@ pub struct PostService;
 impl PostService {
     pub async fn list_by_topic(topic_id: Uuid, limit: i64, offset: i64, db: &PgPool) -> Result<Vec<Post>> {
         let rows = sqlx::query_as::<_, Post>(
-            "SELECT * FROM forum.posts WHERE topic_id = $1 ORDER BY created_at, id LIMIT $2 OFFSET $3",
+            "SELECT * FROM forum.posts WHERE topic_id = $1 AND is_deleted = FALSE
+             ORDER BY created_at, id LIMIT $2 OFFSET $3",
         )
         .bind(topic_id)
         .bind(limit)
@@ -24,10 +25,12 @@ impl PostService {
     }
 
     pub async fn count_by_topic(topic_id: Uuid, db: &PgPool) -> Result<i64> {
-        let n: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM forum.posts WHERE topic_id = $1")
-            .bind(topic_id)
-            .fetch_one(db)
-            .await?;
+        let n: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM forum.posts WHERE topic_id = $1 AND is_deleted = FALSE",
+        )
+        .bind(topic_id)
+        .fetch_one(db)
+        .await?;
         Ok(n)
     }
 
