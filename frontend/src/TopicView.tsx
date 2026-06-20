@@ -203,7 +203,7 @@ export default function TopicView() {
       <div className="max-w-3xl mx-auto px-4 py-5">
         {/* Header */}
         <div className="flex items-center gap-2 mb-4">
-          <button onClick={() => navigate(`/forum/forums/${topic.forum_id}`)} className="p-1.5 rounded hover:bg-surface-1 text-text-secondary" title={t('back')}>
+          <button onClick={() => navigate(`/forum/forums/${topic.forum_id}`)} className="p-1.5 rounded hover:bg-surface-1 text-text-secondary no-print" title={t('back')}>
             <ChevronLeft size={18} />
           </button>
           <h1 className="text-lg font-semibold text-text-primary flex-1 min-w-0 truncate flex items-center gap-2">
@@ -216,14 +216,14 @@ export default function TopicView() {
             {topic.prefix && <span className="px-1.5 py-0.5 rounded text-[11px] font-medium bg-primary-light text-primary shrink-0">{topic.prefix}</span>}
             <span className="truncate">{topic.title}</span>
           </h1>
-          <button onClick={toggleBookmark} title={t('bookmark')} className="p-2 rounded-lg hover:bg-surface-1 text-text-secondary">
+          <button onClick={toggleBookmark} title={t('bookmark')} className="p-2 rounded-lg hover:bg-surface-1 text-text-secondary no-print">
             <Bookmark size={16} className={isBookmarked ? 'fill-primary text-primary' : ''} />
           </button>
-          <button onClick={toggleWatch} title={watching ? t('unsubscribe') : t('subscribe')} className="p-2 rounded-lg hover:bg-surface-1 text-text-secondary">
+          <button onClick={toggleWatch} title={watching ? t('unsubscribe') : t('subscribe')} className="p-2 rounded-lg hover:bg-surface-1 text-text-secondary no-print">
             {watching ? <BellOff size={16} /> : <Bell size={16} />}
           </button>
           {isMod && (
-            <button onClick={(e) => setHeaderMenu({ top: e.clientY, left: e.clientX })} title={t('moderation')} className="p-2 rounded-lg hover:bg-surface-1 text-text-secondary">
+            <button onClick={(e) => setHeaderMenu({ top: e.clientY, left: e.clientX })} title={t('moderation')} className="p-2 rounded-lg hover:bg-surface-1 text-text-secondary no-print">
               <Shield size={16} />
             </button>
           )}
@@ -247,7 +247,7 @@ export default function TopicView() {
         {/* Posts */}
         <div className="space-y-3">
           {posts.map((p, i) => (
-            <article key={p.id} className={`rounded-xl border bg-surface-0 overflow-hidden ${topic.solution_post_id === p.id ? 'border-success' : selectedPosts.has(p.id) ? 'border-primary' : 'border-border'}`}>
+            <article key={p.id} className={`rounded-xl border bg-surface-0 overflow-hidden print-avoid ${topic.solution_post_id === p.id ? 'border-success' : selectedPosts.has(p.id) ? 'border-primary' : 'border-border'}`}>
               <div className="flex">
                 {/* Author column */}
                 <div className="w-36 shrink-0 bg-surface-1 p-3 border-r border-border hidden sm:flex flex-col items-center text-center gap-1">
@@ -267,7 +267,7 @@ export default function TopicView() {
                     <span title={shortDateTime(p.created_at)}>{timeAgo(p.created_at)}</span>
                     {p.edit_count > 0 && <span className="italic">· {t('edited')}</span>}
                     <button onClick={(e) => setPostMenu({ post: p, pos: { top: e.clientY, left: e.clientX } })}
-                      className="ml-auto p-1 rounded hover:bg-surface-2 text-text-tertiary hover:text-text-primary" title={t('post')}>
+                      className="ml-auto p-1 rounded hover:bg-surface-2 text-text-tertiary hover:text-text-primary no-print" title={t('post')}>
                       <MoreHorizontal size={16} />
                     </button>
                   </div>
@@ -308,7 +308,7 @@ export default function TopicView() {
 
         {/* Reply composer */}
         {canReply && !splitMode && (
-          <div ref={replyRef} className="mt-5">
+          <div ref={replyRef} className="mt-5 no-print">
             <PostEditor value={reply} onChange={setReply} placeholder={t('write_reply')} rows={5} onSubmit={submitReply} />
             <div className="flex items-center justify-between gap-2 mt-2">
               {permissions.can_attach ? <AttachPicker value={replyAttachments} onChange={setReplyAttachments} /> : <span />}
