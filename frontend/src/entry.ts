@@ -2,6 +2,8 @@
 import { lazy } from 'react'
 import {
   RouteRegistry, WaffleAppRegistry,
+  ModuleSettingsRegistry,
+  NotificationRegistry,
   useSidebarStore, useSearchStore,
   SDK_VERSION,
 } from '@kubuno/sdk'
@@ -19,6 +21,21 @@ export function register() {
   WaffleAppRegistry.register('forum', 'Forum', [
     { id: 'forum', label: 'Forum', Icon: MessagesSquare, path: '/forum' },
   ])
+
+  // The header gear button opens the per-user Forum settings while in /forum.
+  ModuleSettingsRegistry.register('forum')
+
+  // Declare the notification activities shown in the core Settings → Notifications matrix.
+  NotificationRegistry.register({
+    moduleId: 'forum',
+    title: 'Forum',
+    order: 60,
+    activities: [
+      { id: 'topic_reply', label: 'Réponse à votre sujet', emailDefault: true, pushDefault: true },
+      { id: 'mention', label: 'Vous êtes mentionné', emailDefault: true, pushDefault: true },
+      { id: 'marked_solution', label: 'Votre message est marqué comme solution', emailDefault: true },
+    ],
+  })
 
   useSidebarStore.getState().register({
     moduleId:          'forum',
