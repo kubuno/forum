@@ -1,6 +1,6 @@
 [package]
 name        = "kubuno-forum"
-version     = "0.1.0-alpha"
+version     = "0.1.2"
 edition     = "2021"
 description = "Kubuno Forum — discussion boards (categories, forums, topics, posts) inspired by phpBB"
 license     = "AGPL-3.0"
@@ -44,7 +44,7 @@ clap               = { workspace = true }
 [workspace]
 
 [workspace.package]
-version      = "0.1.0-alpha"
+version      = "0.1.2"
 edition      = "2021"
 authors      = ["Kubuno Contributors"]
 license      = "AGPL-3.0"
