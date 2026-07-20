@@ -36,18 +36,18 @@ export default function ForumSidebarBody({ collapsed = false }: { collapsed?: bo
 
   const feedActive = (k: string) => pathname === `/forum/feed/${k}`
   const feed = (k: string, label: string, icon: React.ReactNode) => (
-    <SidebarNavItem label={label} icon={icon} collapsed={collapsed} active={feedActive(k)} onClick={() => navigate(`/forum/feed/${k}`)} />
+    <SidebarNavItem label={label} icon={icon} collapsed={collapsed} active={feedActive(k)} to={`/forum/feed/${k}`} />
   )
 
   return (
-    <div className="flex flex-col gap-0.5 px-2 py-2">
+    <div className="flex flex-col gap-0.5 px-3 py-2">
       <NotificationsBell collapsed={collapsed} />
       <SidebarNavItem
         label={t('forums')}
         icon={<Home size={18} />}
         collapsed={collapsed}
         active={pathname === '/forum'}
-        onClick={() => navigate('/forum')}
+        to="/forum"
       />
 
       {/* Discover */}
@@ -76,7 +76,7 @@ export default function ForumSidebarBody({ collapsed = false }: { collapsed?: bo
                 icon={<MessagesSquare size={18} />}
                 collapsed={collapsed}
                 active={activeForumId === f.id}
-                onClick={() => navigate(`/forum/forums/${f.id}`)}
+                to={`/forum/forums/${f.id}`}
               />
             ))}
           </div>
@@ -84,20 +84,20 @@ export default function ForumSidebarBody({ collapsed = false }: { collapsed?: bo
       })}
 
       {isAdmin && (
-        <div className="mt-2 pt-2 border-t border-border">
+        <div className="mt-2 pt-2 border-t border-border space-y-0.5">
           <SidebarNavItem
             label={t('moderation')}
             icon={<ShieldAlert size={18} />}
             collapsed={collapsed}
             active={pathname === '/forum/moderation'}
-            onClick={() => navigate('/forum/moderation')}
+            to="/forum/moderation"
           />
           <SidebarNavItem
             label={t('settings')}
             icon={<Settings size={18} />}
             collapsed={collapsed}
             active={pathname === '/forum/settings'}
-            onClick={() => navigate('/forum/settings')}
+            to="/forum/settings"
           />
         </div>
       )}

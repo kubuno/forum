@@ -19,7 +19,7 @@ export default function NotificationsBell({ collapsed }: { collapsed?: boolean }
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState<ForumNotification[]>([])
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
-  const btnRef = useRef<HTMLButtonElement>(null)
+  const btnRef = useRef<HTMLAnchorElement>(null)
   useResolveUsers(items.map(n => n.actor_id).filter(Boolean) as string[])
 
   const refreshCount = () => forumApi.listNotifications(false).then(r => setUnread(r.unread)).catch(() => {})
@@ -46,8 +46,19 @@ export default function NotificationsBell({ collapsed }: { collapsed?: boolean }
 
   return (
     <>
-      <button ref={btnRef} onClick={toggle}
-        className={`relative flex items-center gap-3 rounded-lg px-2 py-2 text-sm hover:bg-surface-1 text-text-secondary ${collapsed ? 'justify-center' : ''}`}>
+      {/* Anchor, never a <button>: the whole left panel is links. Opening the
+          notifications panel is an in-place action, hence href="#".
+          Row metrics mirror the core's SidebarNavItem, and the hover tint is
+          driven from JS: a module's `hover:bg-*` never paints in the host
+          sidebar (its CSS lands in the losing `kubuno-module` cascade layer). */}
+      <a ref={btnRef} href="#" role="button" aria-expanded={open}
+        onClick={e => { e.preventDefault(); toggle() }}
+        onKeyDown={e => { if (e.key === ' ') { e.preventDefault(); toggle() } }}
+        className={`relative flex items-center gap-3 h-10 rounded-full text-sm cursor-pointer no-underline
+                    outline-none focus-visible:ring-2 focus-visible:ring-primary text-text-secondary
+                    ${collapsed ? 'justify-center w-10 mx-auto' : 'w-full px-3'}`}
+        onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'color-mix(in srgb, var(--color-primary) 12%, white)' }}
+        onMouseLeave={e => { e.currentTarget.style.backgroundColor = '' }}>
         <Bell size={18} />
         {!collapsed && <span className="flex-1 text-left">{t('notifications')}</span>}
         {unread > 0 && (
@@ -55,7 +66,7 @@ export default function NotificationsBell({ collapsed }: { collapsed?: boolean }
             {unread > 99 ? '99+' : unread}
           </span>
         )}
-      </button>
+      </a>
       {open && pos && createPortal(
         <>
           <div className="fixed inset-0 z-[9998]" onClick={() => setOpen(false)} />

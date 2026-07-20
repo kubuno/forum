@@ -10,7 +10,7 @@ export default function PostBody({ body }: { body: string }) {
   return (
     <div className="text-sm text-text-primary break-words leading-relaxed
                     [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5
-                    [&_blockquote]:border-l-4 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-text-secondary
+                    [&_blockquote]:bg-surface-2 [&_blockquote]:rounded-lg [&_blockquote]:px-3 [&_blockquote]:py-2 [&_blockquote]:text-text-secondary
                     [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold [&_h3]:font-semibold
                     [&_pre]:bg-surface-2 [&_pre]:p-3 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:my-2
                     [&_table]:border-collapse [&_th]:border [&_th]:border-border [&_th]:px-2 [&_th]:py-1
