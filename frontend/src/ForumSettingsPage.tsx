@@ -16,7 +16,9 @@ import { useModulePrefs } from './userPrefs'
 
 // ── Per-user preferences (backend, cross-device via core users.preferences) ─────
 
-interface ForumPrefs {
+// `type`, not `interface`: only a type alias gets the implicit index signature
+// that `useModulePrefs<T extends Record<string, unknown>>` requires.
+type ForumPrefs = {
   defaultFeed:   string   // 'recent' | 'unanswered' | 'popular'
   topicsPerPage: string   // '20' | '30' | '50'
   markReadOnOpen: boolean

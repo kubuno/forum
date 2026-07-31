@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { openImagePicker } from '@kubuno/sdk'
 import { useTranslation } from 'react-i18next'
 import { Bold, Italic, Link2, Image as ImageIcon, Smile } from 'lucide-react'
 import { prompt } from '@kubuno/sdk'
@@ -56,8 +57,11 @@ export default function PostEditor({ value, onChange, onSubmit, placeholder, aut
   }
 
   const insertImage = async () => {
-    const url = await prompt({ title: t('insert_image'), placeholder: 'https://…', confirmLabel: t('add') })
-    if (url?.trim()) insertAtCursor(`![](${url.trim()})`)
+    // The picker returns a File only when the user uploads one; markdown needs
+    // a URL, so a file has to be pushed somewhere addressable first — not
+    // supported here yet, hence URL-only sources.
+    const picked = await openImagePicker({ title: t('insert_image'), exclude: ['upload', 'webcam'] })
+    if (picked?.kind === 'url') insertAtCursor(`![](${picked.url})`)
   }
 
   const Btn = ({ onClick, title, children }: { onClick: () => void; title: string; children: React.ReactNode }) => (
