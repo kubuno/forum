@@ -1,22 +1,22 @@
 import { useEffect } from 'react'
-import { useNavigate, useParams, useLocation } from 'react-router-dom'
+import { useParams, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Home, MessagesSquare, ShieldAlert, Settings, Clock, HelpCircle, Flame, Mail,
   User as UserIcon, Bookmark, Users,
 } from 'lucide-react'
 import { SidebarNavItem, useAuthStore } from '@kubuno/sdk'
 import { forumApi } from './api'
-import { setNav } from './nav'
+import { setQueryClient } from './nav'
 import NotificationsBell from './NotificationsBell'
 
 export default function ForumSidebarBody({ collapsed = false }: { collapsed?: boolean }) {
   const { t } = useTranslation('forum')
-  const navigate = useNavigate()
 
-  // Expose navigation to non-component callbacks (host search bar).
-  useEffect(() => setNav(navigate), [navigate])
+  // Expose the query client to non-component callbacks (sidebar "New" menu items).
+  const qc = useQueryClient()
+  useEffect(() => setQueryClient(qc), [qc])
   const params = useParams()
   const { pathname } = useLocation()
   const me = useAuthStore(s => s.user)

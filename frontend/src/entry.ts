@@ -2,18 +2,20 @@
 import { lazy } from 'react'
 import {
   RouteRegistry, WaffleAppRegistry,
+  ExtensionRegistry,
   ModuleSettingsRegistry,
   NotificationRegistry,
   useSidebarStore, useSearchStore,
+  navigate,
   SDK_VERSION,
 } from '@kubuno/sdk'
 import { MessagesSquare } from 'lucide-react'
 import './index.css'
 import './i18n'
 import { useForumStore } from './store'
-import { goTo } from './nav'
-import ForumCreateMenu from './ForumCreateMenu'
+import { newActionItems } from './ForumCreateMenu'
 import ForumSidebarBody from './ForumSidebarBody'
+import { registerForumAdmin } from './admin/ForumAdminPanel'
 
 export const sdkVersion = SDK_VERSION
 
@@ -24,6 +26,9 @@ export function register() {
 
   // The header gear button opens the per-user Forum settings while in /forum.
   ModuleSettingsRegistry.register('forum')
+
+  // Instance administration (structure, ranks) in the core admin console.
+  registerForumAdmin()
 
   // Declare the notification activities shown in the core Settings → Notifications matrix.
   NotificationRegistry.register({
@@ -41,9 +46,14 @@ export function register() {
     moduleId:          'forum',
     routePrefix:       '/forum',
     newButtonLabelKey: 'forum:new_topic',
-    NewActions:        ForumCreateMenu,
     SidebarBody:       ForumSidebarBody,
     collapsedBody:     true,
+  })
+
+  // Sidebar "New" button: contribute MenuItem[] (data) to the shell menu.
+  ExtensionRegistry.register('shell.new-actions', 'forum', {
+    moduleId: 'forum',
+    items: newActionItems,
   })
 
   useSearchStore.getState().register({
@@ -51,7 +61,7 @@ export function register() {
     routePrefix:    '/forum',
     placeholder:    'Search the forum…',
     placeholderKey: 'forum:search_ph',
-    onSearch:       (q) => { useForumStore.getState().setSearchQuery(q); goTo('/forum/search') },
+    onSearch:       (q) => { useForumStore.getState().setSearchQuery(q); navigate('/forum/search') },
   })
 
   const CategoryIndex     = lazy(() => import('./CategoryIndex'))

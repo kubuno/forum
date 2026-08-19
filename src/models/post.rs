@@ -12,7 +12,11 @@ pub struct Post {
     pub body_md:          String,
     pub reply_to_post_id: Option<Uuid>,
     pub is_first_post:    bool,
+    /// False while the message waits in the approval queue (see
+    /// `forum.post_approval_mode`). Only its author and moderators see it.
     pub is_approved:      bool,
+    pub approved_at:      Option<DateTime<Utc>>,
+    pub approved_by:      Option<Uuid>,
     pub edited_at:        Option<DateTime<Utc>>,
     pub edited_by:        Option<Uuid>,
     pub edit_reason:      Option<String>,

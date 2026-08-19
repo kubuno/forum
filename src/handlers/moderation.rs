@@ -112,6 +112,71 @@ pub async fn remove_moderator(
     Ok(StatusCode::NO_CONTENT)
 }
 
+// ── Approval queue ──────────────────────────────────────────────────────────
+
+/// Which forums this caller may decide for: `None` means "all of them"
+/// (platform administrator), otherwise the forums they moderate. Returning the
+/// scope rather than a yes/no is what keeps a moderator of one board from
+/// releasing messages posted in another.
+async fn moderation_scope(user: &ForumUser, state: &AppState) -> Result<Option<Vec<Uuid>>> {
+    if user.is_admin() {
+        return Ok(None);
+    }
+    let forums: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT forum_id FROM forum.moderators WHERE user_id = $1",
+    )
+    .bind(user.id)
+    .fetch_all(&state.db)
+    .await?;
+    if forums.is_empty() {
+        return Err(ForumError::Forbidden);
+    }
+    Ok(Some(forums))
+}
+
+/// GET /mod/queue — contributions waiting for a decision.
+pub async fn pending_queue(
+    State(state): State<AppState>,
+    Extension(user): Extension<ForumUser>,
+) -> Result<Json<Value>> {
+    let scope = moderation_scope(&user, &state).await?;
+    let pending = ModerationService::list_pending(scope.as_deref(), 100, &state.db).await?;
+    let total = ModerationService::count_pending(scope.as_deref(), &state.db).await?;
+    Ok(Json(json!({ "pending": pending, "total": total })))
+}
+
+/// Refuses a decision on a message posted in a forum the caller does not moderate.
+async fn assert_may_decide(post_id: Uuid, user: &ForumUser, state: &AppState) -> Result<()> {
+    let scope = moderation_scope(user, state).await?;
+    let Some(forums) = scope else { return Ok(()) }; // administrator: every forum
+    let post = PostService::get(post_id, &state.db).await?;
+    if forums.contains(&post.forum_id) { Ok(()) } else { Err(ForumError::Forbidden) }
+}
+
+/// POST /mod/queue/:id/approve — publish a held message (and its topic).
+pub async fn approve_pending(
+    State(state): State<AppState>,
+    Extension(user): Extension<ForumUser>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<Value>> {
+    assert_may_decide(id, &user, &state).await?;
+    ModerationService::approve_post(id, user.id, &state.db).await?;
+    // Only now is the message public, so only now is it worth announcing.
+    publisher::publish_post_created(&state, id, user.id).await;
+    Ok(Json(json!({ "ok": true })))
+}
+
+/// POST /mod/queue/:id/reject — discard a held message (and its topic).
+pub async fn reject_pending(
+    State(state): State<AppState>,
+    Extension(user): Extension<ForumUser>,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode> {
+    assert_may_decide(id, &user, &state).await?;
+    ModerationService::reject_post(id, user.id, &state.db).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 // ── Moderation log ──────────────────────────────────────────────────────────
 
 pub async fn mod_log(

@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ChevronLeft, Lock, MoreHorizontal, Send, Bell, BellOff, Shield, Check, X,
-  Bookmark, CheckCircle2, Trash2,
+  Bookmark, CheckCircle2, Trash2, Clock,
 } from 'lucide-react'
 import { MenuDropdown, ConfirmDialog, Button, Spinner, type MenuItem } from '@ui'
 import { useConfirm, prompt, useAuthStore } from '@kubuno/sdk'
@@ -284,6 +284,14 @@ export default function TopicView() {
                       {topic.solution_post_id === p.id && (
                         <div className="flex items-center gap-1.5 mb-2 text-xs font-medium text-success">
                           <CheckCircle2 size={14} /> {t('solution')}
+                        </div>
+                      )}
+                      {/* Only its author and the moderators are served a message
+                          that is still waiting; saying so is what stops the
+                          author from posting it a second time. */}
+                      {!p.is_approved && (
+                        <div className="flex items-center gap-1.5 mb-2 text-xs font-medium text-warning">
+                          <Clock size={14} /> {t('post_pending')}
                         </div>
                       )}
                       <PostBody body={p.body_md} />

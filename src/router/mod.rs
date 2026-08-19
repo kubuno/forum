@@ -65,6 +65,9 @@ pub fn build(state: AppState) -> Router {
         // Moderation queue + tooling
         .route("/reports",     get(moderation::list_reports))
         .route("/reports/:id", patch(moderation::resolve_report))
+        .route("/mod/queue",             get(moderation::pending_queue))
+        .route("/mod/queue/:id/approve", post(moderation::approve_pending))
+        .route("/mod/queue/:id/reject",  post(moderation::reject_pending))
         .route("/mod/log",     get(moderation::mod_log))
         .route("/mod/bans",    get(moderation::list_bans))
         .route("/mod/notes",   post(moderation::add_note))

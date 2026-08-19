@@ -28,6 +28,23 @@ pub struct ResolveReportDto {
     pub status: String,
 }
 
+/// One row of the approval queue: a message held back by
+/// `forum.post_approval_mode`, decorated with enough context (topic title,
+/// forum name) that a moderator can decide without opening it.
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+pub struct PendingPost {
+    pub id:            Uuid,
+    pub topic_id:      Uuid,
+    pub forum_id:      Uuid,
+    pub author_id:     Uuid,
+    pub body_md:       String,
+    /// True when releasing this message also releases a whole new topic.
+    pub is_first_post: bool,
+    pub created_at:    DateTime<Utc>,
+    pub topic_title:   String,
+    pub forum_name:    String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Moderator {
     pub forum_id:   Uuid,

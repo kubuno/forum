@@ -40,3 +40,149 @@ publishes = [
     "ForumPostDeleted",
     "ForumReported",
 ]
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  Forum — admin panel pages
+# ══════════════════════════════════════════════════════════════════════════════
+# Each becomes an entry of the admin menu (Modules → Forum), at its own address
+# (/admin/modules/forum/<id>). These pages manage OBJECTS (categories, forums,
+# ranks) rather than scalar settings, so their content is contributed as custom
+# sections through ModuleAdminRegistry — there are no [[settings]] here.
+
+[[setting_groups]]
+id          = "structure"
+label       = "Structure"
+icon        = "FolderTree"
+position    = 1
+description  = "Les catégories et les forums de l'instance, leur ordre, leur verrouillage, leurs modérateurs et leurs permissions."
+
+[[setting_groups]]
+id          = "ranks"
+label       = "Rangs"
+icon        = "Award"
+position    = 2
+description  = "Les rangs attribués aux membres selon leur activité."
+
+# ── Publication ───────────────────────────────────────────────────────────────
+# Contrairement aux deux pages ci-dessus, celles qui suivent sont des réglages
+# scalaires : le core en rend le formulaire à partir du schéma. Chaque clé est
+# lue par du code qui agit — voir src/config/instance.rs.
+
+[[setting_groups]]
+id          = "posting"
+label       = "Publication"
+icon        = "PenLine"
+position    = 3
+description  = "Ce qu'un membre peut écrire, à quel rythme, et jusqu'à quand il peut se relire."
+
+[[settings]]
+key     = "max_post_length"
+scope   = "global"
+group   = "posting"
+type    = "int"
+default = 100000
+min     = 100
+max     = 1000000
+unit    = "caractères"
+label   = "Longueur maximale d'un message"
+description = "Refuse la publication d'un message plus long. S'applique aussi à la modification d'un message existant."
+
+[[settings]]
+key     = "post_edit_window_minutes"
+scope   = "global"
+group   = "posting"
+type    = "int"
+default = 0
+min     = 0
+max     = 10080
+unit    = "minutes"
+label   = "Délai de modification d'un message"
+description = "Durée pendant laquelle l'auteur peut encore modifier son propre message. Passé ce délai, seuls les modérateurs le peuvent. 0 : aucune limite de temps."
+
+[[settings]]
+key     = "min_seconds_between_posts"
+scope   = "global"
+group   = "posting"
+type    = "int"
+default = 0
+min     = 0
+max     = 3600
+unit    = "secondes"
+label   = "Délai minimal entre deux messages"
+description = "Anti-inondation : refuse une contribution postée trop vite après la précédente du même auteur. Les modérateurs ne sont pas concernés. 0 : désactivé."
+
+# ── Modération ────────────────────────────────────────────────────────────────
+
+[[setting_groups]]
+id          = "moderation"
+label       = "Modération"
+icon        = "ShieldCheck"
+position    = 4
+description  = "Quelles contributions attendent l'accord d'un modérateur avant d'être visibles."
+
+[[settings]]
+key     = "post_approval_mode"
+scope   = "global"
+group   = "moderation"
+type    = "enum"
+values  = ["none", "new_members", "all"]
+default = "none"
+risk    = "warning"
+label   = "Approbation des messages"
+description = "« none » : tout est publié immédiatement. « new_members » : seules les contributions des membres récents attendent un modérateur. « all » : toute contribution attend un modérateur. La file se traite dans le forum, page Modération."
+
+[[settings]]
+key     = "new_member_post_count"
+scope   = "global"
+group   = "moderation"
+type    = "int"
+default = 5
+min     = 1
+max     = 10000
+unit    = "messages"
+label   = "Un membre cesse d'être « récent » après"
+description = "Nombre de messages publiés à partir duquel un membre n'est plus modéré, en mode « new_members ». Un message en attente ne compte pas : on ne sort pas de la modération en y entrant."
+
+[[settings]]
+key     = "pending_retention_days"
+scope   = "global"
+group   = "moderation"
+type    = "int"
+default = 14
+min     = 0
+max     = 365
+unit    = "jours"
+risk    = "warning"
+label   = "Rétention des contributions en attente (jours)"
+description = "Une contribution laissée sans décision plus longtemps est écartée automatiquement. 0 : la file est conservée indéfiniment."
+
+# ── Profils ───────────────────────────────────────────────────────────────────
+
+[[setting_groups]]
+id          = "profiles"
+label       = "Profils"
+icon        = "UserRound"
+position    = 5
+description  = "Ce qu'un membre peut afficher sur son profil public et sous ses messages."
+
+[[settings]]
+key     = "allow_signatures"
+scope   = "global"
+group   = "profiles"
+type    = "bool"
+default = true
+label   = "Signatures autorisées"
+description = "Autorise les membres à afficher une signature sous leurs messages. Désactivées, les signatures déjà écrites cessent d'être servies (le texte n'est pas effacé)."
+
+[[settings]]
+key     = "max_signature_length"
+scope   = "global"
+group   = "profiles"
+type    = "int"
+default = 2000
+min     = 0
+max     = 2000
+unit    = "caractères"
+depends_on = "allow_signatures"
+label   = "Longueur maximale d'une signature"
+description = "Refuse l'enregistrement d'une signature plus longue."

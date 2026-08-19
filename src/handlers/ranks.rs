@@ -10,7 +10,7 @@ use validator::Validate;
 use crate::{
     errors::{ForumError, Result},
     middleware::ForumUser,
-    models::rank::{CreateRankDto, UpdateProfileDto, UpdateRankDto},
+    models::rank::{CreateRankDto, UpdateProfileDto, UpdateRankDto, UserProfile},
     services::{
         engagement_service::EngagementService, permission_service::PermissionService,
         rank_service::RankService,
@@ -60,8 +60,21 @@ pub async fn delete(
 
 // ── Profiles ──────────────────────────────────────────────────────────────────
 
+/// Blanks the signature when the instance has turned signatures off.
+///
+/// Refusing to SAVE a signature is not enough: an instance that switches them
+/// off would keep displaying every signature written before the change under
+/// every message their authors ever posted. The stored text is left alone —
+/// turning the setting back on restores it — it simply stops being served.
+fn apply_signature_policy(profile: &mut UserProfile, allowed: bool) {
+    if !allowed {
+        profile.signature_md = None;
+    }
+}
+
 pub async fn get_profile(State(state): State<AppState>, Path(uid): Path<Uuid>) -> Result<Json<Value>> {
-    let profile = RankService::get_profile(uid, &state.db).await?;
+    let mut profile = RankService::get_profile(uid, &state.db).await?;
+    apply_signature_policy(&mut profile, state.instance().allow_signatures);
     let topics = crate::services::topic_service::TopicService::by_author(uid, 10, &state.db).await?;
     Ok(Json(json!({ "profile": profile, "topics": topics })))
 }
@@ -76,7 +89,8 @@ pub async fn my_profile(
     State(state): State<AppState>,
     Extension(user): Extension<ForumUser>,
 ) -> Result<Json<Value>> {
-    let profile = RankService::get_profile(user.id, &state.db).await?;
+    let mut profile = RankService::get_profile(user.id, &state.db).await?;
+    apply_signature_policy(&mut profile, state.instance().allow_signatures);
     Ok(Json(json!({ "profile": profile })))
 }
 
@@ -86,7 +100,28 @@ pub async fn update_my_signature(
     Json(dto): Json<UpdateProfileDto>,
 ) -> Result<Json<Value>> {
     dto.validate().map_err(|e| ForumError::Validation(e.to_string()))?;
-    let profile = RankService::update_signature(user.id, dto, &state.db).await?;
+
+    // Instance policy, validated before anything reaches the database. An empty
+    // string is always accepted: clearing a signature must stay possible even
+    // once the administrator has switched the feature off.
+    let cfg = state.instance();
+    if let Some(sig) = dto.signature_md.as_deref() {
+        let written = sig.trim();
+        if !written.is_empty() {
+            if !cfg.allow_signatures {
+                return Err(ForumError::Forbidden);
+            }
+            if sig.chars().count() > cfg.max_signature_length {
+                return Err(ForumError::Validation(format!(
+                    "signature trop longue ({} caractères maximum)",
+                    cfg.max_signature_length
+                )));
+            }
+        }
+    }
+
+    let mut profile = RankService::update_signature(user.id, dto, &state.db).await?;
+    apply_signature_policy(&mut profile, cfg.allow_signatures);
     Ok(Json(json!({ "profile": profile })))
 }
 

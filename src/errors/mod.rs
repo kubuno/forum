@@ -22,6 +22,11 @@ pub enum ForumError {
     #[error("Conflict: {0}")]
     Conflict(String),
 
+    /// The caller is going too fast (flood control). Carries the number of
+    /// seconds still to wait, so the client can say something useful.
+    #[error("Too many requests, retry in {0}s")]
+    RateLimited(i64),
+
     #[error("Database error")]
     Database(#[from] sqlx::Error),
 
@@ -37,6 +42,7 @@ impl IntoResponse for ForumError {
             ForumError::NotFound(_)   => (StatusCode::NOT_FOUND,            "NOT_FOUND",    self.to_string()),
             ForumError::Validation(_) => (StatusCode::UNPROCESSABLE_ENTITY, "VALIDATION",   self.to_string()),
             ForumError::Conflict(_)   => (StatusCode::CONFLICT,             "CONFLICT",     self.to_string()),
+            ForumError::RateLimited(_) => (StatusCode::TOO_MANY_REQUESTS,   "RATE_LIMITED", self.to_string()),
             ForumError::Database(e) => {
                 tracing::error!(error = %e, "Database error");
                 (StatusCode::INTERNAL_SERVER_ERROR, "DATABASE_ERROR", "Database error".to_string())

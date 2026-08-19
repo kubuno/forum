@@ -1,26 +1,22 @@
-import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
+import type { MenuItem } from '@ui'
 import { MessageSquarePlus, FolderPlus, MessagesSquare } from 'lucide-react'
-import { useNavigate, useParams, useLocation } from 'react-router-dom'
-import { useTranslation } from 'react-i18next'
-import { useQueryClient } from '@tanstack/react-query'
-import { prompt, useAuthStore } from '@kubuno/sdk'
+import { i18n, prompt, useAuthStore, navigate } from '@kubuno/sdk'
 import { forumApi } from './api'
+import { getQueryClient } from './nav'
 
-const ITEM_CLASS =
-  'flex items-center gap-3 w-full px-3 py-2 text-sm text-text-primary ' +
-  'hover:bg-surface-1 cursor-pointer outline-none'
+/**
+ * Items for the sidebar "New" button (`shell.new-actions` extension point).
+ * Built when the menu opens — fresh labels, role and route, no hooks.
+ */
+export function newActionItems(): MenuItem[] {
+  const t = (key: string) => i18n.t(`forum:${key}`)
 
-export default function ForumCreateMenu() {
-  const navigate = useNavigate()
-  const { t } = useTranslation('forum')
-  const qc = useQueryClient()
-  const params = useParams()
-  const { pathname } = useLocation()
-  const me = useAuthStore(s => s.user)
+  const me = useAuthStore.getState().user
   const isAdmin = me?.role === 'admin'
 
-  // The :id param only refers to a forum on the forum-view route.
-  const activeForumId = pathname.startsWith('/forum/forums/') ? (params.id ?? null) : null
+  // The :id segment only refers to a forum on the forum-view route.
+  const match = /^\/forum\/forums\/([^/?#]+)/.exec(window.location.pathname)
+  const activeForumId = match ? match[1] : null
 
   const newTopic = () => {
     if (activeForumId) navigate(`/forum/forums/${activeForumId}?new=1`)
@@ -31,27 +27,34 @@ export default function ForumCreateMenu() {
     const name = await prompt({ title: t('new_category'), placeholder: t('name'), confirmLabel: t('create') })
     if (!name?.trim()) return
     await forumApi.createCategory({ name: name.trim() })
-    qc.invalidateQueries({ queryKey: ['forum-categories'] })
+    getQueryClient()?.invalidateQueries({ queryKey: ['forum-categories'] })
   }
 
-  return (
-    <>
-      <DropdownMenu.Item onSelect={newTopic} className={ITEM_CLASS}>
-        <MessageSquarePlus size={16} className="text-text-secondary" />
-        {t('new_topic')}
-      </DropdownMenu.Item>
-      {isAdmin && (
-        <>
-          <DropdownMenu.Item onSelect={newCategory} className={ITEM_CLASS}>
-            <FolderPlus size={16} className="text-text-secondary" />
-            {t('new_category')}
-          </DropdownMenu.Item>
-          <DropdownMenu.Item onSelect={() => navigate('/forum/settings')} className={ITEM_CLASS}>
-            <MessagesSquare size={16} className="text-text-secondary" />
-            {t('new_forum')}
-          </DropdownMenu.Item>
-        </>
-      )}
-    </>
-  )
+  const items: MenuItem[] = [
+    {
+      type: 'action',
+      label: t('new_topic'),
+      icon: <MessageSquarePlus size={16} />,
+      onClick: newTopic,
+    },
+  ]
+
+  if (isAdmin) {
+    items.push(
+      {
+        type: 'action',
+        label: t('new_category'),
+        icon: <FolderPlus size={16} />,
+        onClick: () => { void newCategory() },
+      },
+      {
+        type: 'action',
+        label: t('new_forum'),
+        icon: <MessagesSquare size={16} />,
+        onClick: () => navigate('/forum/settings'),
+      },
+    )
+  }
+
+  return items
 }

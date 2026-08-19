@@ -12,7 +12,11 @@ pub struct Topic {
     pub slug:              String,
     pub topic_type:        String,
     pub is_locked:         bool,
+    /// False while the opening message waits in the approval queue. The topic
+    /// is then invisible to everyone but its author and the moderators.
     pub is_approved:       bool,
+    pub approved_at:       Option<DateTime<Utc>>,
+    pub approved_by:       Option<Uuid>,
     pub view_count:        i32,
     pub reply_count:       i32,
     pub first_post_id:     Option<Uuid>,

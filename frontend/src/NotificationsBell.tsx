@@ -2,9 +2,9 @@ import { useEffect, useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { Bell } from 'lucide-react'
+import { navigate } from '@kubuno/sdk'
 import { forumApi, type ForumNotification } from './api'
 import { useResolveUsers, useUser } from './users'
-import { goTo } from './nav'
 import { timeAgo } from './helpers'
 
 const KIND_LABEL: Record<string, string> = {
@@ -40,7 +40,7 @@ export default function NotificationsBell({ collapsed }: { collapsed?: boolean }
   const onClick = async (n: ForumNotification) => {
     setOpen(false)
     await forumApi.markNotifications(n.id).then(setUnread).catch(() => {})
-    if (n.topic_id) goTo(`/forum/topics/${n.topic_id}`)
+    if (n.topic_id) navigate(`/forum/topics/${n.topic_id}`)
   }
   const markAll = async () => { await forumApi.markNotifications().then(setUnread); setItems(its => its.map(n => ({ ...n, is_read: true }))) }
 

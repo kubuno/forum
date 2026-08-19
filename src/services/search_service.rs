@@ -32,7 +32,8 @@ impl SearchService {
                     LEFT(p.body_md, 240) AS snippet, p.created_at
                FROM forum.posts p
                JOIN forum.topics t ON t.id = p.topic_id
-              WHERE p.body_md ILIKE $1 ESCAPE '\\' OR t.title ILIKE $1 ESCAPE '\\'
+              WHERE p.is_approved
+                AND (p.body_md ILIKE $1 ESCAPE '\\' OR t.title ILIKE $1 ESCAPE '\\')
               ORDER BY p.created_at DESC
               LIMIT $2 OFFSET $3",
         )

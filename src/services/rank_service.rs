@@ -126,10 +126,13 @@ impl RankService {
         Ok(())
     }
 
-    /// Recent posts authored by a user (their public activity feed).
+    /// Recent posts authored by a user (their public activity feed). Approved
+    /// only: this page is read by everyone, so it must not be where a message
+    /// still waiting for a moderator becomes visible.
     pub async fn activity(user_id: Uuid, limit: i64, db: &PgPool) -> Result<Vec<crate::models::post::Post>> {
         let rows = sqlx::query_as::<_, crate::models::post::Post>(
-            "SELECT * FROM forum.posts WHERE author_id = $1 AND is_deleted = FALSE
+            "SELECT * FROM forum.posts
+              WHERE author_id = $1 AND is_deleted = FALSE AND is_approved
              ORDER BY created_at DESC LIMIT $2",
         )
         .bind(user_id)

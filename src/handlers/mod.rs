@@ -18,6 +18,53 @@ pub mod tags;
 pub mod topics;
 
 use serde::Deserialize;
+use uuid::Uuid;
+
+use crate::{
+    config::instance::InstanceConfig,
+    errors::{ForumError, Result},
+    services::rank_service::RankService,
+    state::AppState,
+};
+
+/// Refuses a message longer than the instance allows.
+///
+/// The DTOs carry a compile-time `#[validate(length(max = 100000))]` ceiling,
+/// which is a sanity bound on the wire format; this is the ADMINISTRATOR's
+/// ceiling, which is a policy and can be lowered from the console. Both apply,
+/// and the stricter one wins — as it should.
+pub fn assert_body_within_limit(body: &str, cfg: &InstanceConfig) -> Result<()> {
+    if body.chars().count() > cfg.max_post_length {
+        return Err(ForumError::Validation(format!(
+            "message trop long ({} caractères maximum)",
+            cfg.max_post_length
+        )));
+    }
+    Ok(())
+}
+
+/// Whether a contribution by this author is published immediately or held in
+/// the approval queue.
+///
+/// The author's post count is only fetched when the queue is actually armed —
+/// on the overwhelming majority of instances, where nothing is moderated, this
+/// costs no query at all.
+pub async fn approval_decision(
+    state: &AppState,
+    author_id: Uuid,
+    is_moderator: bool,
+    cfg: &InstanceConfig,
+) -> Result<bool> {
+    if is_moderator || !cfg.post_approval_mode.is_active() {
+        return Ok(true);
+    }
+    let profile = RankService::get_profile(author_id, &state.db).await?;
+    Ok(cfg.post_approval_mode.publishes_immediately(
+        false,
+        profile.post_count,
+        cfg.new_member_post_count,
+    ))
+}
 
 /// Shared pagination query parameters.
 #[derive(Debug, Deserialize)]

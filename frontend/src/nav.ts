@@ -1,12 +1,15 @@
-// Bridge so non-component callbacks (e.g. the host search bar's onSearch) can use
-// the module's react-router navigation. The sidebar — mounted for every /forum
-// route — registers the live navigate function here.
-let navFn: ((to: string) => void) | null = null
+// Bridge so non-component callbacks (e.g. the sidebar "New" menu items) can use
+// the React Query client. The sidebar — mounted for every /forum route —
+// registers the live instance here.
+// (Navigation itself no longer needs a bridge: use `navigate` from @kubuno/sdk.)
+import type { QueryClient } from '@tanstack/react-query'
 
-export function setNav(fn: (to: string) => void) {
-  navFn = fn
+let queryClient: QueryClient | null = null
+
+export function setQueryClient(qc: QueryClient) {
+  queryClient = qc
 }
 
-export function goTo(to: string) {
-  navFn?.(to)
+export function getQueryClient(): QueryClient | null {
+  return queryClient
 }

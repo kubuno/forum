@@ -43,6 +43,8 @@ export interface Topic {
   topic_type: TopicType
   is_locked: boolean
   is_approved: boolean
+  approved_at: string | null
+  approved_by: string | null
   view_count: number
   reply_count: number
   first_post_id: string | null
@@ -66,6 +68,8 @@ export interface Post {
   reply_to_post_id: string | null
   is_first_post: boolean
   is_approved: boolean
+  approved_at: string | null
+  approved_by: string | null
   edited_at: string | null
   edited_by: string | null
   edit_reason: string | null
@@ -103,6 +107,21 @@ export interface Report {
   handled_by: string | null
   handled_at: string | null
   created_at: string
+}
+
+/** One entry of the approval queue: a contribution held back by the instance's
+ *  moderation policy, with enough context to decide without opening it. */
+export interface PendingPost {
+  id: string
+  topic_id: string
+  forum_id: string
+  author_id: string
+  body_md: string
+  /** True when releasing this message also releases a whole new topic. */
+  is_first_post: boolean
+  created_at: string
+  topic_title: string
+  forum_name: string
 }
 
 export interface Moderator {
@@ -308,6 +327,12 @@ export const forumApi = {
     apiClient.get<{ reports: Report[] }>(`/forum/reports${qs({ status })}`).then(r => r.data.reports),
   resolveReport: (id: string, status: 'resolved' | 'rejected') =>
     apiClient.patch<{ report: Report }>(`/forum/reports/${id}`, { status }).then(r => r.data.report),
+  pendingQueue: () =>
+    apiClient.get<{ pending: PendingPost[]; total: number }>('/forum/mod/queue').then(r => r.data),
+  approvePending: (id: string) =>
+    apiClient.post(`/forum/mod/queue/${id}/approve`).then(() => undefined),
+  rejectPending: (id: string) =>
+    apiClient.post(`/forum/mod/queue/${id}/reject`).then(() => undefined),
   listModerators: (forumId: string) =>
     apiClient.get<{ moderators: Moderator[] }>(`/forum/forums/${forumId}/moderators`).then(r => r.data.moderators),
   addModerator: (forumId: string, userId: string) =>

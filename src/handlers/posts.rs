@@ -9,7 +9,7 @@ use validator::Validate;
 
 use crate::{
     errors::{ForumError, Result},
-    handlers::Pagination,
+    handlers::{approval_decision, assert_body_within_limit, Pagination},
     middleware::ForumUser,
     models::post::{CreatePostDto, UpdatePostDto},
     services::{
@@ -27,10 +27,11 @@ pub async fn list(
     Query(page): Query<Pagination>,
 ) -> Result<Json<Value>> {
     let topic = TopicService::get(topic_id, &state.db).await?;
-    PermissionService::assert_can_view(topic.forum_id, &user, &state.db).await?;
+    let perms = PermissionService::assert_can_view(topic.forum_id, &user, &state.db).await?;
+    let is_mod = perms.is_admin || perms.is_moderator;
     let (limit, offset) = page.resolve(20, 100);
-    let posts = PostService::list_by_topic(topic_id, limit, offset, &state.db).await?;
-    let total = PostService::count_by_topic(topic_id, &state.db).await?;
+    let posts = PostService::list_by_topic(topic_id, user.id, is_mod, limit, offset, &state.db).await?;
+    let total = PostService::count_by_topic(topic_id, user.id, is_mod, &state.db).await?;
     Ok(Json(json!({ "posts": posts, "total": total })))
 }
 
@@ -41,6 +42,8 @@ pub async fn create(
     Json(dto): Json<CreatePostDto>,
 ) -> Result<(StatusCode, Json<Value>)> {
     dto.validate().map_err(|e| ForumError::Validation(e.to_string()))?;
+    let cfg = state.instance();
+    assert_body_within_limit(&dto.body_md, &cfg)?;
 
     let topic = TopicService::get(topic_id, &state.db).await?;
     let forum = ForumService::get(topic.forum_id, &state.db).await?;
@@ -55,27 +58,46 @@ pub async fn create(
     if !is_mod && crate::services::moderation_service::ModerationService::is_banned(user.id, &state.db).await? {
         return Err(ForumError::Forbidden);
     }
+    PostService::assert_not_flooding(user.id, is_mod, &cfg, &state.db).await?;
 
     let reply_to = dto.reply_to_post_id;
     let mention_ids = dto.mention_user_ids.clone();
-    let post = PostService::create(topic_id, topic.forum_id, user.id, dto, &state.db).await?;
-    publisher::publish_post_created(&state, post.id, user.id).await;
+    let approved = approval_decision(&state, user.id, is_mod, &cfg).await?;
+    let post = PostService::create(topic_id, topic.forum_id, user.id, dto, approved, &state.db).await?;
 
-    // Notify the topic author, the replied-to author and any @mentioned users.
-    NotificationService::notify(&state, topic.author_id, "reply", user.id, topic_id, Some(post.id), None).await;
-    if let Some(rid) = reply_to {
-        if let Ok(parent) = PostService::get(rid, &state.db).await {
-            NotificationService::notify(&state, parent.author_id, "reply", user.id, topic_id, Some(post.id), None).await;
+    // A message held for approval is not an event and notifies nobody: telling
+    // the topic author that someone replied, when nobody can read the reply,
+    // announces the queue's contents to a person with no say over it.
+    if approved {
+        publisher::publish_post_created(&state, post.id, user.id).await;
+        NotificationService::notify(&state, topic.author_id, "reply", user.id, topic_id, Some(post.id), None).await;
+        if let Some(rid) = reply_to {
+            if let Ok(parent) = PostService::get(rid, &state.db).await {
+                NotificationService::notify(&state, parent.author_id, "reply", user.id, topic_id, Some(post.id), None).await;
+            }
+        }
+        for uid in mention_ids {
+            NotificationService::notify(&state, uid, "mention", user.id, topic_id, Some(post.id), None).await;
         }
     }
-    for uid in mention_ids {
-        NotificationService::notify(&state, uid, "mention", user.id, topic_id, Some(post.id), None).await;
-    }
-    Ok((StatusCode::CREATED, Json(json!({ "post": post }))))
+    Ok((StatusCode::CREATED, Json(json!({ "post": post, "pending": !approved }))))
 }
 
-pub async fn get(State(state): State<AppState>, Path(id): Path<Uuid>) -> Result<Json<Value>> {
+pub async fn get(
+    State(state): State<AppState>,
+    Extension(user): Extension<ForumUser>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<Value>> {
     let post = PostService::get(id, &state.db).await?;
+    // Same rule as the listing: a message waiting for approval is readable by
+    // its author and by moderators, and by nobody else — including through a
+    // direct link to its id.
+    if !post.is_approved && post.author_id != user.id {
+        let perms = PermissionService::effective(post.forum_id, &user, &state.db).await?;
+        if !perms.is_admin && !perms.is_moderator {
+            return Err(ForumError::NotFound(format!("Post {id}")));
+        }
+    }
     Ok(Json(json!({ "post": post })))
 }
 
@@ -86,7 +108,9 @@ pub async fn update(
     Json(dto): Json<UpdatePostDto>,
 ) -> Result<Json<Value>> {
     dto.validate().map_err(|e| ForumError::Validation(e.to_string()))?;
-    let post = PostService::update(id, &user, dto, &state.db).await?;
+    let cfg = state.instance();
+    assert_body_within_limit(&dto.body_md, &cfg)?;
+    let post = PostService::update(id, &user, dto, &cfg, &state.db).await?;
     publisher::publish_post_updated(&state, post.id, user.id).await;
     Ok(Json(json!({ "post": post })))
 }

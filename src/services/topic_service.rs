@@ -16,19 +16,32 @@ const VALID_TYPES: [&str; 4] = ["normal", "sticky", "announcement", "global"];
 pub struct TopicService;
 
 impl TopicService {
-    pub async fn list_by_forum(forum_id: Uuid, limit: i64, offset: i64, db: &PgPool) -> Result<Vec<Topic>> {
+    /// Topics of a forum, as this viewer may see them. A topic waiting for
+    /// approval stays visible to its own author (so they can tell it was
+    /// received, not lost) and to moderators, and to nobody else.
+    pub async fn list_by_forum(
+        forum_id: Uuid,
+        viewer_id: Uuid,
+        is_moderator: bool,
+        limit: i64,
+        offset: i64,
+        db: &PgPool,
+    ) -> Result<Vec<Topic>> {
         // Pinned types first (global, announcement, sticky), then by latest activity.
         let rows = sqlx::query_as::<_, Topic>(
-            "SELECT * FROM forum.topics WHERE forum_id = $1
+            "SELECT * FROM forum.topics
+              WHERE forum_id = $1 AND (is_approved = TRUE OR author_id = $2 OR $3::boolean)
              ORDER BY CASE topic_type
                         WHEN 'global'       THEN 0
                         WHEN 'announcement' THEN 1
                         WHEN 'sticky'       THEN 2
                         ELSE 3 END,
                       last_post_at DESC NULLS LAST, created_at DESC
-             LIMIT $2 OFFSET $3",
+             LIMIT $4 OFFSET $5",
         )
         .bind(forum_id)
+        .bind(viewer_id)
+        .bind(is_moderator)
         .bind(limit)
         .bind(offset)
         .fetch_all(db)
@@ -36,11 +49,21 @@ impl TopicService {
         Ok(rows)
     }
 
-    pub async fn count_by_forum(forum_id: Uuid, db: &PgPool) -> Result<i64> {
-        let n: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM forum.topics WHERE forum_id = $1")
-            .bind(forum_id)
-            .fetch_one(db)
-            .await?;
+    pub async fn count_by_forum(
+        forum_id: Uuid,
+        viewer_id: Uuid,
+        is_moderator: bool,
+        db: &PgPool,
+    ) -> Result<i64> {
+        let n: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM forum.topics
+              WHERE forum_id = $1 AND (is_approved = TRUE OR author_id = $2 OR $3::boolean)",
+        )
+        .bind(forum_id)
+        .bind(viewer_id)
+        .bind(is_moderator)
+        .fetch_one(db)
+        .await?;
         Ok(n)
     }
 
@@ -72,6 +95,8 @@ impl TopicService {
         }
         qb.push("WHERE NOT EXISTS (SELECT 1 FROM forum.permissions pm \
                  WHERE pm.forum_id = t.forum_id AND pm.role = 'user' AND pm.can_view = FALSE) ");
+        // Cross-forum discovery must not surface what moderation is still holding.
+        qb.push("AND (t.is_approved = TRUE OR t.author_id = ").push_bind(user_id).push(") ");
 
         match kind {
             "unanswered" => { qb.push("AND t.reply_count = 0 "); }
@@ -101,8 +126,11 @@ impl TopicService {
 
     /// Topics authored by a given user (public profile listing).
     pub async fn by_author(author_id: Uuid, limit: i64, db: &PgPool) -> Result<Vec<Topic>> {
+        // Public listing: approved only. A member's profile is read by everyone,
+        // so it must not be the place where a queued topic becomes visible.
         let rows = sqlx::query_as::<_, Topic>(
-            "SELECT * FROM forum.topics WHERE author_id = $1 ORDER BY created_at DESC LIMIT $2",
+            "SELECT * FROM forum.topics WHERE author_id = $1 AND is_approved \
+             ORDER BY created_at DESC LIMIT $2",
         )
         .bind(author_id)
         .bind(limit.clamp(1, 100))
@@ -121,7 +149,19 @@ impl TopicService {
 
     /// Create a topic together with its opening post. `topic_type` must already be
     /// authorised by the caller (only moderators/admins may pin topics).
-    pub async fn create(forum_id: Uuid, author_id: Uuid, topic_type: &str, dto: CreateTopicDto, db: &PgPool) -> Result<(Topic, Post)> {
+    ///
+    /// `approved` decides whether the topic appears at once or waits in the
+    /// moderation queue. A topic and its opening message share one fate: a topic
+    /// whose only message is hidden would be an empty shell in the listing. The
+    /// author's counters are only bumped on publication — see `PostService::create`.
+    pub async fn create(
+        forum_id: Uuid,
+        author_id: Uuid,
+        topic_type: &str,
+        dto: CreateTopicDto,
+        approved: bool,
+        db: &PgPool,
+    ) -> Result<(Topic, Post)> {
         if !VALID_TYPES.contains(&topic_type) {
             return Err(ForumError::Validation(format!("invalid topic type: {topic_type}")));
         }
@@ -129,8 +169,10 @@ impl TopicService {
 
         let mut tx = db.begin().await?;
         let topic = sqlx::query_as::<_, Topic>(
-            "INSERT INTO forum.topics (forum_id, author_id, title, slug, topic_type, is_question, prefix)
-             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *",
+            "INSERT INTO forum.topics
+                (forum_id, author_id, title, slug, topic_type, is_question, prefix,
+                 is_approved, approved_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CASE WHEN $8::boolean THEN NOW() END) RETURNING *",
         )
         .bind(forum_id)
         .bind(author_id)
@@ -139,24 +181,29 @@ impl TopicService {
         .bind(topic_type)
         .bind(dto.is_question)
         .bind(dto.prefix.as_deref().filter(|s| !s.is_empty()))
+        .bind(approved)
         .fetch_one(&mut *tx)
         .await?;
 
         let post = sqlx::query_as::<_, Post>(
-            "INSERT INTO forum.posts (topic_id, forum_id, author_id, body_md, is_first_post)
-             VALUES ($1, $2, $3, $4, TRUE) RETURNING *",
+            "INSERT INTO forum.posts
+                (topic_id, forum_id, author_id, body_md, is_first_post, is_approved, approved_at)
+             VALUES ($1, $2, $3, $4, TRUE, $5, CASE WHEN $5::boolean THEN NOW() END) RETURNING *",
         )
         .bind(topic.id)
         .bind(forum_id)
         .bind(author_id)
         .bind(&dto.body_md)
+        .bind(approved)
         .fetch_one(&mut *tx)
         .await?;
 
         aggregates::recompute_topic(&mut tx, topic.id).await?;
         aggregates::recompute_forum(&mut tx, forum_id).await?;
-        RankService::bump_post_count(&mut tx, author_id, 1).await?;
-        RankService::bump_topic_count(&mut tx, author_id, 1).await?;
+        if approved {
+            RankService::bump_post_count(&mut tx, author_id, 1).await?;
+            RankService::bump_topic_count(&mut tx, author_id, 1).await?;
+        }
 
         // Attach selected tags (only ones that exist).
         for tag_id in &dto.tag_ids {

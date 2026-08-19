@@ -9,12 +9,13 @@ use validator::Validate;
 
 use crate::{
     errors::{ForumError, Result},
-    handlers::Pagination,
+    handlers::{approval_decision, assert_body_within_limit, Pagination},
     middleware::ForumUser,
     models::topic::{CreateTopicDto, MergeTopicDto, MoveTopicDto, SplitTopicDto, UpdateTopicDto},
     services::{
         engagement_service::EngagementService, forum_service::ForumService,
-        permission_service::PermissionService, topic_service::TopicService,
+        permission_service::PermissionService, post_service::PostService,
+        topic_service::TopicService,
     },
     state::AppState,
     events::publisher,
@@ -26,10 +27,11 @@ pub async fn list_by_forum(
     Path(forum_id): Path<Uuid>,
     Query(page): Query<Pagination>,
 ) -> Result<Json<Value>> {
-    PermissionService::assert_can_view(forum_id, &user, &state.db).await?;
+    let perms = PermissionService::assert_can_view(forum_id, &user, &state.db).await?;
+    let is_mod = perms.is_admin || perms.is_moderator;
     let (limit, offset) = page.resolve(30, 100);
-    let topics = TopicService::list_by_forum(forum_id, limit, offset, &state.db).await?;
-    let total = TopicService::count_by_forum(forum_id, &state.db).await?;
+    let topics = TopicService::list_by_forum(forum_id, user.id, is_mod, limit, offset, &state.db).await?;
+    let total = TopicService::count_by_forum(forum_id, user.id, is_mod, &state.db).await?;
     Ok(Json(json!({ "topics": topics, "total": total })))
 }
 
@@ -40,6 +42,8 @@ pub async fn create(
     Json(dto): Json<CreateTopicDto>,
 ) -> Result<(StatusCode, Json<Value>)> {
     dto.validate().map_err(|e| ForumError::Validation(e.to_string()))?;
+    let cfg = state.instance();
+    assert_body_within_limit(&dto.body_md, &cfg)?;
 
     let forum = ForumService::get(forum_id, &state.db).await?;
     let perms = PermissionService::effective(forum_id, &user, &state.db).await?;
@@ -53,6 +57,7 @@ pub async fn create(
     if !is_mod && crate::services::moderation_service::ModerationService::is_banned(user.id, &state.db).await? {
         return Err(ForumError::Forbidden);
     }
+    PostService::assert_not_flooding(user.id, is_mod, &cfg, &state.db).await?;
 
     // Only moderators/admins may pin (sticky/announcement/global); others get 'normal'.
     let topic_type = match dto.topic_type.as_deref() {
@@ -61,10 +66,15 @@ pub async fn create(
         None => "normal".to_string(),
     };
 
-    let (topic, post) = TopicService::create(forum_id, user.id, &topic_type, dto, &state.db).await?;
-    publisher::publish_topic_created(&state, topic.id, user.id).await;
-    publisher::publish_post_created(&state, post.id, user.id).await;
-    Ok((StatusCode::CREATED, Json(json!({ "topic": topic, "post": post }))))
+    let approved = approval_decision(&state, user.id, is_mod, &cfg).await?;
+    let (topic, post) = TopicService::create(forum_id, user.id, &topic_type, dto, approved, &state.db).await?;
+
+    // A held topic is not news yet: the bus is told when a moderator releases it.
+    if approved {
+        publisher::publish_topic_created(&state, topic.id, user.id).await;
+        publisher::publish_post_created(&state, post.id, user.id).await;
+    }
+    Ok((StatusCode::CREATED, Json(json!({ "topic": topic, "post": post, "pending": !approved }))))
 }
 
 pub async fn get(
@@ -74,6 +84,15 @@ pub async fn get(
 ) -> Result<Json<Value>> {
     let topic = TopicService::get(id, &state.db).await?;
     let perms = PermissionService::assert_can_view(topic.forum_id, &user, &state.db).await?;
+    // A topic held for approval is not addressable by its id either: the
+    // listing hides it, so the URL must not be the way around that. Its author
+    // and the moderators still reach it.
+    if !topic.is_approved
+        && topic.author_id != user.id
+        && !(perms.is_admin || perms.is_moderator)
+    {
+        return Err(ForumError::NotFound(format!("Topic {id}")));
+    }
     TopicService::touch_view(id, &state.db).await?;
     Ok(Json(json!({
         "topic": topic,
