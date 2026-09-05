@@ -6,7 +6,7 @@ import { forumApi } from './api'
 import { useResolveUsers } from './users'
 import { AuthorName, AuthorAvatar } from './Author'
 
-/** `/forum/ignored` — the caller's own ignore list (phpBB "foes"/zebra). A
+/** `/forum/ignored` — the caller's own ignore list. A
  *  purely client-side display preference: unignoring here only changes what
  *  folds in the topic view, nothing on the server-side post listing. */
 export default function IgnoredUsersPage() {

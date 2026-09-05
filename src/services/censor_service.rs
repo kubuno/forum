@@ -1,4 +1,4 @@
-//! Server-side word censor (phpBB-style): an admin-curated list of words is
+//! Server-side word censor: an admin-curated list of words is
 //! substituted in post bodies at render time. The substitution happens on the
 //! server before a post is serialized, so a client has no toggle to bypass
 //! it — unlike a client-side filter, it cannot see the raw word at all.

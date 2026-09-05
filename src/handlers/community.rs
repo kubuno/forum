@@ -138,7 +138,7 @@ pub struct TeamMember {
 /// GET /team — the moderation team, grouped by forum.
 ///
 /// The core does not expose the platform's admin roster to a module, so this
-/// deliberately lists per-forum moderators only (phpBB-style "team" page,
+/// deliberately lists per-forum moderators only ("team" page,
 /// moderation flavor) — never platform admins. Restricted to forums the
 /// caller may see, via the same `push_visible_forum` predicate every other
 /// listing uses (SEC-01/14): a forum hidden from the caller never leaks its

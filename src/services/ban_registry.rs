@@ -1,5 +1,5 @@
 //! In-memory cache of every currently active ban — by account, IP address,
-//! and email (phpBB-style) — mirroring the pattern of `censor_service`'s
+//! and email — mirroring the pattern of `censor_service`'s
 //! `LazyLock<RwLock<...>>`: cheap enough to consult on every request, rebuilt
 //! from the database whenever an admin bans/unbans someone (`reload`, called
 //! after every write) and once at boot (see `main.rs`).

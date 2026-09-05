@@ -134,7 +134,7 @@ export interface ReportReason {
 }
 
 /** An admin-curated word substituted server-side in every post body at
- *  render time (phpBB-style word censor). */
+ *  render time (word censor). */
 export interface CensoredWord {
   id: string
   pattern: string
@@ -145,7 +145,7 @@ export interface CensoredWord {
 export type ProfileFieldType = 'text' | 'textarea' | 'bool' | 'url' | 'date' | 'dropdown'
 export type ProfileFieldVisibility = 'public' | 'registered'
 
-/** An admin-curated custom profile field definition (phpBB-style). Answers
+/** An admin-curated custom profile field definition. Answers
  *  are always rendered as plain, escaped text — never Markdown/HTML. */
 export interface ProfileField {
   id: string
@@ -168,7 +168,7 @@ export interface ProfileFieldValue {
   value: string
 }
 
-/** One question/answer pair of the editable FAQ (phpBB-style), admin-curated
+/** One question/answer pair of the editable FAQ, admin-curated
  *  and read by every member. `answer_md` is Markdown, rendered client-side
  *  with `PostBody` — the same sanitized renderer as post bodies. */
 export interface FaqEntry {
@@ -372,7 +372,7 @@ export interface ModLogEntry {
 }
 export interface Warning { id: string; user_id: string; moderator_id: string; reason: string; created_at: string }
 export interface Ban { user_id: string; banned_by: string; reason: string | null; until: string | null; created_at: string }
-// IP / email bans (phpBB-style, exact match, admin only — see services::ban_registry).
+// IP / email bans (exact match, admin only — see services::ban_registry).
 export interface IpBan { id: string; value: string; reason: string | null; banned_by: string; until: string | null; created_at: string }
 export interface EmailBan { id: string; email: string; reason: string | null; banned_by: string; until: string | null; created_at: string }
 
@@ -401,7 +401,7 @@ export interface PmThreadDetail {
   messages: PmMessage[]
 }
 
-// Ignore list (phpBB "foes"/zebra) — a purely client-side display preference:
+// Ignore list — a purely client-side display preference:
 // the backend keeps returning every post from an ignored member, the
 // frontend just folds them by default (`GET /me/ignored` returns bare ids).
 
@@ -517,7 +517,7 @@ export const forumApi = {
     apiClient.post<{ word: CensoredWord }>('/forum/censored-words', body).then(r => r.data.word),
   deleteCensoredWord: (id: string) => apiClient.delete(`/forum/censored-words/${id}`).then(() => undefined),
 
-  // FAQ (phpBB-style, admin-curated, read by every member)
+  // FAQ (admin-curated, read by every member)
   listFaq: () =>
     apiClient.get<{ entries: FaqEntry[] }>('/forum/faq').then(r => r.data.entries),
   createFaq: (body: { question: string; answer_md: string; position?: number }) =>
@@ -703,7 +703,7 @@ export const forumApi = {
   banUser: (uid: string, reason?: string, days?: number) =>
     apiClient.post<{ ban: Ban }>(`/forum/mod/users/${uid}/ban`, { reason, days }).then(r => r.data.ban),
   unbanUser: (uid: string) => apiClient.delete(`/forum/mod/users/${uid}/ban`).then(() => undefined),
-  // IP / email bans (phpBB-style, exact match, admin only).
+  // IP / email bans (exact match, admin only).
   listIpBans: () => apiClient.get<{ bans: IpBan[] }>('/forum/bans/ip').then(r => r.data.bans),
   banIp: (value: string, reason?: string, days?: number) =>
     apiClient.post<{ ban: IpBan }>('/forum/bans/ip', { value, reason, days }).then(r => r.data.ban),
@@ -747,7 +747,7 @@ export const forumApi = {
   blockPmUser: (user_id: string) => apiClient.post('/forum/me/pm/blocks', { user_id }).then(() => undefined),
   unblockPmUser: (uid: string) => apiClient.delete(`/forum/me/pm/blocks/${uid}`).then(() => undefined),
 
-  // Ignore list (phpBB "foes"/zebra) — display-only, see the note above.
+  // Ignore list — display-only, see the note above.
   listIgnored: () => apiClient.get<{ ignored: string[] }>('/forum/me/ignored').then(r => r.data.ignored),
   ignoreUser: (user_id: string) => apiClient.post('/forum/me/ignored', { user_id }).then(() => undefined),
   unignoreUser: (uid: string) => apiClient.delete(`/forum/me/ignored/${uid}`).then(() => undefined),

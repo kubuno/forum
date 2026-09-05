@@ -7,7 +7,7 @@ import { forumApi } from './api'
 import PostBody from './PostBody'
 
 /**
- * Public FAQ (phpBB-style): a short, admin-curated list of question/answer
+ * Public FAQ: a short, admin-curated list of question/answer
  * pairs (see `admin/ForumAdminPanel.tsx`), read here by every member as a
  * simple accordion — one question open at a time. Answers are Markdown,
  * rendered through the same sanitized `PostBody` renderer as post bodies.

@@ -353,7 +353,7 @@ pub async fn list_bans(
     Ok(Json(json!({ "bans": bans })))
 }
 
-// ── IP bans (admin only, phpBB-style, exact match) ──────────────────────────
+// ── IP bans (admin only, exact match) ──────────────────────────
 
 pub async fn list_ip_bans(
     State(state): State<AppState>,
@@ -385,7 +385,7 @@ pub async fn unban_ip(
     Ok(StatusCode::NO_CONTENT)
 }
 
-// ── Email bans (admin only, phpBB-style, exact match) ───────────────────────
+// ── Email bans (admin only, exact match) ───────────────────────
 
 pub async fn list_email_bans(
     State(state): State<AppState>,

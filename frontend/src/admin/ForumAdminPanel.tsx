@@ -742,7 +742,7 @@ function CensoredWordsSection() {
   )
 }
 
-// ── Champs de profil personnalisés (façon phpBB, EAV) ────────────────────────
+// ── Custom profile fields (EAV) ─────────────────────────────────────────────────────────────────────
 //
 // Every answer a member gives to one of these fields is shown on their
 // profile as plain, escaped text — never Markdown/HTML (see ProfilePage.tsx)
@@ -958,7 +958,7 @@ function ProfileFieldsSection() {
   )
 }
 
-// ── FAQ (phpBB-style, admin-curated, read by every member) ──────────────────
+// ── FAQ (admin-curated, read by every member) ──────────────────
 //
 // Every entry here is shown to members on the dedicated `/forum/faq` page
 // (`FaqPage.tsx`), rendered through the same sanitized Markdown renderer as

@@ -4,7 +4,7 @@ use serde_json::Value;
 use uuid::Uuid;
 use validator::{Validate, ValidationError};
 
-/// The allowed field kinds (phpBB-style "custom profile fields", kept
+/// The allowed field kinds ("custom profile fields", kept
 /// intentionally small — no numeric/checkbox-group/etc.).
 const FIELD_TYPES: &[&str] = &["text", "textarea", "bool", "url", "date", "dropdown"];
 const VISIBILITIES: &[&str] = &["public", "registered"];

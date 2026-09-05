@@ -1,5 +1,5 @@
 //! Private messages: 1:1 / small-group conversations, entirely separate from
-//! the phpBB-style boards (see migration `000013`).
+//! the discussion boards (see migration `000013`).
 //!
 //! SECURITY (the whole point of this subsystem): every read is filtered by
 //! `forum.pm_participants` membership. A caller who is not a participant of a

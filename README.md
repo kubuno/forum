@@ -14,7 +14,7 @@
 ![React](https://img.shields.io/badge/React-19-61dafb.svg)
 ![Module](https://img.shields.io/badge/Kubuno-module-4D38DB.svg)
 
-**Kubuno Forum — self-hosted discussion boards (categories, forums, topics, posts), inspired by phpBB.**
+**Kubuno Forum — self-hosted discussion boards (categories, forums, topics, posts).**
 
 A module for [Kubuno](https://github.com/kubuno/core), the self-hosted, libre (AGPLv3) cloud platform.
 
@@ -24,7 +24,7 @@ A module for [Kubuno](https://github.com/kubuno/core), the self-hosted, libre (A
 - **Posting** — Markdown messages with quoting, editing (with edit history metadata) and per-post attachments (stored in the drive module).
 - **Topics** — normal / sticky / announcement / global types, locking, unread tracking, view & reply counters.
 - **Moderation** — lock, move, split and merge topics; a report queue; per-forum moderators.
-- **Ranks & profiles** — phpBB-style ranks based on post count, plus per-user signatures.
+- **Ranks & profiles** — classic ranks based on post count, plus per-user signatures.
 - **Permissions** — simplified per-forum roles (guest / user / moderator).
 - **Search** — full-text style search across topic titles and post bodies.
 

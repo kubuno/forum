@@ -90,7 +90,7 @@ pub fn build(state: AppState) -> Router {
         .route("/mod/topics/bulk", post(moderation::bulk_topics))
         .route("/mod/log",     get(moderation::mod_log))
         .route("/mod/bans",    get(moderation::list_bans))
-        // IP / email bans (phpBB-style, exact match, admin only) — enforced by
+        // IP / email bans (exact match, admin only) — enforced by
         // `middleware::enforce_ban`, layered below.
         .route("/bans/ip",        get(moderation::list_ip_bans).post(moderation::ban_ip))
         .route("/bans/ip/:id",    delete(moderation::unban_ip))
@@ -110,7 +110,7 @@ pub fn build(state: AppState) -> Router {
         .route("/profiles/:uid/rank", patch(ranks::assign_rank))
         .route("/me/profile",       get(ranks::my_profile).patch(ranks::update_my_signature))
         .route("/me/subscriptions", get(ranks::my_subscriptions))
-        // Custom profile fields (phpBB-style EAV): admin-curated definitions,
+        // Custom profile fields (EAV): admin-curated definitions,
         // one member's own answers, and a member's answers as shown to
         // others. `/me/profile-fields` is a distinct literal segment from
         // `/profile-fields/:id` and `/users/:id/profile-fields`, so none of
@@ -119,7 +119,7 @@ pub fn build(state: AppState) -> Router {
         .route("/profile-fields/:id", patch(profile_fields::update_field).delete(profile_fields::delete_field))
         .route("/me/profile-fields",  get(profile_fields::my_values).put(profile_fields::set_my_values))
         .route("/users/:id/profile-fields", get(profile_fields::user_values))
-        // FAQ (phpBB-style): admin-curated question/answer pairs, read by
+        // FAQ: admin-curated question/answer pairs, read by
         // every member, written only by an admin (see `handlers/faq.rs`).
         .route("/faq",     get(faq::list).post(faq::create))
         .route("/faq/:id", patch(faq::update).delete(faq::delete))
@@ -128,11 +128,11 @@ pub fn build(state: AppState) -> Router {
         .route("/me/drafts/:id",    delete(drafts::delete))
         .route("/me/notifications", get(notifications::list))
         .route("/me/notifications/read", post(notifications::mark_read))
-        // Ignore list (phpBB "foes"/zebra) — distinct from `/me/pm/blocks`,
+        // Ignore list — distinct from `/me/pm/blocks`,
         // which mutes PMs; this one only affects the topic view's display.
         .route("/me/ignored",     get(ignore::list).post(ignore::add))
         .route("/me/ignored/:uid", delete(ignore::remove))
-        // Private messages (modern conversations, not the phpBB PM system).
+        // Private messages (modern conversations, not a folder-based mailbox).
         // ⚠️ `/me/pm/unread` and `/me/pm/blocks` are registered before
         // `/me/pm/:id` so they are never captured by the `:id` param.
         .route("/me/pm",         get(pm::list_threads).post(pm::create_thread))

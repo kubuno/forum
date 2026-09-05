@@ -1,5 +1,5 @@
 //! Private messages: modern 1:1 / small-group conversations (see migration
-//! `000013`). Kept fully separate from the phpBB-style boards — no folders,
+//! `000013`). Kept fully separate from the discussion boards — no folders,
 //! no rules engine — and from search (`search_service` never touches these
 //! tables: a DM is never indexed).
 

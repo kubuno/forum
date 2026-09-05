@@ -1,4 +1,4 @@
-//! Editable FAQ (phpBB-style): a short admin-curated list of question/answer
+//! Editable FAQ: a short admin-curated list of question/answer
 //! pairs, read by every member and written only through the admin console
 //! (see `handlers/faq.rs`, gated by `PermissionService::assert_admin`).
 

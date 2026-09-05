@@ -203,7 +203,7 @@ async fn main() -> Result<()> {
         tracing::warn!(error = %e, "censored words: initial load failed");
     }
 
-    // Ban registry (account/IP/email, phpBB-style): same best-effort load, so the
+    // Ban registry (account/IP/email): same best-effort load, so the
     // very first request already enforces whatever the admin has already banned.
     if let Err(e) = kubuno_forum::services::ban_registry::BanRegistry::reload(&pool).await {
         tracing::warn!(error = %e, "ban registry: initial load failed");

@@ -8,7 +8,7 @@ import { forumApi } from './api'
 import { useResolveUsers } from './users'
 import { AuthorName, AuthorAvatar } from './Author'
 
-/** phpBB-style "The team" page. Lists per-forum moderators, grouped by forum.
+/** "The team" page. Lists per-forum moderators, grouped by forum.
  *
  * The core does not expose the platform's admin roster to a module, so this
  * deliberately shows the moderation team only — never platform admins — and

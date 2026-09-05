@@ -2,7 +2,7 @@
 name        = "kubuno-forum"
 version     = "0.1.6"
 edition     = "2021"
-description = "Kubuno Forum — discussion boards (categories, forums, topics, posts) inspired by phpBB"
+description = "Kubuno Forum — discussion boards (categories, forums, topics, posts)"
 license     = "AGPL-3.0"
 repository  = "https://github.com/kubuno/forum"
 

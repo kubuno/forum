@@ -34,7 +34,7 @@ pub async fn list(
     let (limit, offset) = page.resolve(20, 100);
     let mut posts = PostService::list_by_topic(topic_id, user.id, is_mod, limit, offset, &state.db).await?;
     let total = PostService::count_by_topic(topic_id, user.id, is_mod, &state.db).await?;
-    // Word censor (server-side, phpBB-style): substituted here so the response
+    // Word censor (server-side): substituted here so the response
     // body never carries the raw word — a client-side filter would be trivial
     // to bypass by reading the payload directly.
     for post in &mut posts {

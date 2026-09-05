@@ -1,4 +1,4 @@
-//! Ignore list (phpBB-style "foes"/zebra): a member can ignore another member
+//! Ignore list: a member can ignore another member
 //! so their posts fold under a "hidden" banner in the topic view (see
 //! migration `000015`). Purely a display preference — see
 //! `services/ignore_service.rs` for the security model.

@@ -28,7 +28,7 @@ pub struct CreateReportDto {
     pub reason_id: Option<Uuid>,
 }
 
-/// A predefined reason an admin curates for the report chip picker (phpBB-style).
+/// A predefined reason an admin curates for the report chip picker.
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct ReportReason {
     pub id:          Uuid,
@@ -149,7 +149,7 @@ pub struct ModNoteDto {
     pub body:           String,
 }
 
-// ── IP / email bans (phpBB-style, enforced server-side, exact match) ────────
+// ── IP / email bans (enforced server-side, exact match) ────────
 
 /// A banned IP address (`services::ban_registry`, `middleware::enforce_ban`).
 /// `value` is always the exact, canonical `IpAddr::to_string()` form — no
@@ -194,7 +194,7 @@ pub struct EmailBanDto {
     pub days:   Option<i64>, // None = permanent
 }
 
-// ── Word censor (phpBB-style, applied server-side at render time) ───────────
+// ── Word censor (applied server-side at render time) ───────────
 
 /// An admin-curated word/phrase substituted in every post body when it is
 /// rendered — see `services::censor_service`. `pattern` is always a literal

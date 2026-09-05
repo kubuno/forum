@@ -129,7 +129,7 @@ export default function TopicView() {
   const { data: bookmarks = [] } = useQuery({ queryKey: ['forum-bookmarks'], queryFn: forumApi.listBookmarks })
   const isBookmarked = bookmarks.some(b => b.id === topicId)
 
-  // Ignore list (phpBB "foes"/zebra): a display-only fold, not a moderation
+  // Ignore list: a display-only fold, not a moderation
   // action — the backend keeps returning every post regardless.
   const { data: ignoredIds = [] } = useQuery({
     queryKey: ['forum-ignored'],

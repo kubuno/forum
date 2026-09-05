@@ -75,7 +75,7 @@ pub async fn require_auth(
 const CLIENT_IP_HEADER: &str = "x-kubuno-client-ip";
 
 /// Rejects a request from someone currently banned by account, IP, or email
-/// (phpBB-style block lists — see `services::ban_registry`). Must run
+/// (block lists — see `services::ban_registry`). Must run
 /// *after* `require_auth` (see `router::build`), so `ForumUser` is already in
 /// the request extensions; consults only the in-memory `BanRegistry`, never
 /// the database, so it costs nothing on the hot path.

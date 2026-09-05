@@ -291,7 +291,7 @@ impl ModerationService {
         Ok(BanRegistry::is_user_banned(user_id))
     }
 
-    // ── IP bans (admin only, phpBB-style, exact match) ────────────────────────
+    // ── IP bans (admin only, exact match) ────────────────────────
 
     pub async fn ban_ip(value: &str, by: Uuid, reason: Option<&str>, days: Option<i64>, db: &PgPool) -> Result<IpBan> {
         let ip: std::net::IpAddr = value
@@ -338,7 +338,7 @@ impl ModerationService {
         Ok(rows)
     }
 
-    // ── Email bans (admin only, phpBB-style, exact match) ─────────────────────
+    // ── Email bans (admin only, exact match) ─────────────────────
 
     pub async fn ban_email(email: &str, by: Uuid, reason: Option<&str>, days: Option<i64>, db: &PgPool) -> Result<EmailBan> {
         let normalized = email.trim().to_lowercase();

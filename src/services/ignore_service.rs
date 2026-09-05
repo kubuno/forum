@@ -1,4 +1,4 @@
-//! Ignore list (phpBB-style "foes"/zebra): see migration `000015`.
+//! Ignore list: see migration `000015`.
 //!
 //! SECURITY: purely a display preference for the caller's own client. A
 //! member manages ONLY their own list — every method here is keyed off the

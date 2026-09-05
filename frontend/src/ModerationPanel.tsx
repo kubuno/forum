@@ -237,7 +237,7 @@ function BansTab() {
   )
 }
 
-// IP bans (phpBB-style, exact match — see services::ban_registry on the backend).
+// IP bans (exact match — see services::ban_registry on the backend).
 function IpBansSection() {
   const { t } = useTranslation('forum')
   const qc = useQueryClient()
@@ -295,7 +295,7 @@ function IpBansSection() {
   )
 }
 
-// Email bans (phpBB-style, exact match — email is normalized to lowercase server-side).
+// Email bans (exact match — email is normalized to lowercase server-side).
 function EmailBansSection() {
   const { t } = useTranslation('forum')
   const qc = useQueryClient()
