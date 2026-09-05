@@ -4,6 +4,8 @@ import { openImagePicker } from '@kubuno/sdk'
 import { useTranslation } from 'react-i18next'
 import { Bold, Italic, Link2, Image as ImageIcon, Smile } from 'lucide-react'
 import { prompt } from '@kubuno/sdk'
+import { useMentionPicker, type MentionRef } from './MentionPicker'
+import PostBody from './PostBody'
 
 const EMOJIS = ['😀', '😅', '😂', '🙂', '😉', '😍', '🤔', '👍', '👎', '🙏', '👏', '🔥', '🎉', '✅', '❌', '⚠️', '💡', '❤️', '🚀', '👀', '📌', '⏰', '📎', '🐛']
 
@@ -14,15 +16,25 @@ interface Props {
   placeholder?: string
   autoFocus?: boolean
   rows?: number
+  /** Fired once per user picked from the "@" mention dropdown; the caller
+   *  collects these to build `mention_user_ids` on submit. */
+  onMention?: (mention: MentionRef) => void
 }
 
+type Mode = 'write' | 'preview'
+
 /** Markdown composer reused across new-topic and reply/edit flows. */
-export default function PostEditor({ value, onChange, onSubmit, placeholder, autoFocus, rows = 4 }: Props) {
+export default function PostEditor({ value, onChange, onSubmit, placeholder, autoFocus, rows = 4, onMention }: Props) {
   const { t } = useTranslation('forum')
   const ref = useRef<HTMLTextAreaElement>(null)
   const emojiBtnRef = useRef<HTMLButtonElement>(null)
   const [emojiOpen, setEmojiOpen] = useState(false)
   const [emojiPos, setEmojiPos] = useState<{ left: number; bottom: number } | null>(null)
+  const [mode, setMode] = useState<Mode>('write')
+  // Kept mounted regardless of `mode`: it tracks the textarea via `ref`, and the
+  // mention dropdown / Ctrl+Enter shortcut are only ever wired to that textarea,
+  // which itself only renders in "write" mode below.
+  const mention = useMentionPicker({ value, onChange, textareaRef: ref, onMention })
 
   const toggleEmoji = () => {
     if (emojiOpen) { setEmojiOpen(false); return }
@@ -69,15 +81,33 @@ export default function PostEditor({ value, onChange, onSubmit, placeholder, aut
       className="p-1.5 rounded text-text-secondary hover:text-text-primary hover:bg-surface-2">{children}</button>
   )
 
+  // Approximate the textarea's rendered height so the preview pane doesn't
+  // visibly jump in size when the two tabs are toggled.
+  const minHeight = `${rows * 1.5 + 1.25}rem`
+
   return (
     <div className="border border-border rounded-lg overflow-visible relative bg-surface-0">
       <div className="flex items-center gap-0.5 px-1.5 py-1 border-b border-border">
-        <Btn onClick={() => surround('**', '**')} title={t('bold')}><Bold size={15} /></Btn>
-        <Btn onClick={() => surround('*', '*')} title={t('italic')}><Italic size={15} /></Btn>
-        <Btn onClick={insertLink} title={t('insert_link')}><Link2 size={15} /></Btn>
-        <Btn onClick={insertImage} title={t('insert_image')}><ImageIcon size={15} /></Btn>
-        <button ref={emojiBtnRef} type="button" onMouseDown={(e) => e.preventDefault()} onClick={toggleEmoji} title={t('emoji')}
-          className="p-1.5 rounded text-text-secondary hover:text-text-primary hover:bg-surface-2"><Smile size={15} /></button>
+        <div className="flex items-center gap-1 mr-1">
+          <button type="button" onClick={() => setMode('write')}
+            className={`h-8 px-3 rounded-lg text-sm ${mode === 'write' ? 'bg-primary text-white font-medium' : 'text-text-secondary hover:bg-surface-1'}`}>
+            {t('editor_write', { defaultValue: 'Écrire' })}
+          </button>
+          <button type="button" onClick={() => { setMode('preview'); setEmojiOpen(false) }}
+            className={`h-8 px-3 rounded-lg text-sm ${mode === 'preview' ? 'bg-primary text-white font-medium' : 'text-text-secondary hover:bg-surface-1'}`}>
+            {t('editor_preview', { defaultValue: 'Aperçu' })}
+          </button>
+        </div>
+        {mode === 'write' && (
+          <>
+            <Btn onClick={() => surround('**', '**')} title={t('bold')}><Bold size={15} /></Btn>
+            <Btn onClick={() => surround('*', '*')} title={t('italic')}><Italic size={15} /></Btn>
+            <Btn onClick={insertLink} title={t('insert_link')}><Link2 size={15} /></Btn>
+            <Btn onClick={insertImage} title={t('insert_image')}><ImageIcon size={15} /></Btn>
+            <button ref={emojiBtnRef} type="button" onMouseDown={(e) => e.preventDefault()} onClick={toggleEmoji} title={t('emoji')}
+              className="p-1.5 rounded text-text-secondary hover:text-text-primary hover:bg-surface-2"><Smile size={15} /></button>
+          </>
+        )}
         {emojiOpen && emojiPos && createPortal(
           <>
             <div className="fixed inset-0 z-[9999]" onClick={() => setEmojiOpen(false)} />
@@ -94,16 +124,28 @@ export default function PostEditor({ value, onChange, onSubmit, placeholder, aut
           document.body,
         )}
       </div>
-      <textarea
-        ref={ref}
-        value={value}
-        autoFocus={autoFocus}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={(e) => { if (onSubmit && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); onSubmit() } }}
-        placeholder={placeholder}
-        rows={rows}
-        className="w-full text-sm p-2.5 resize-y focus:outline-none rounded-b-lg bg-surface-0"
-      />
+      {mode === 'write' ? (
+        <textarea
+          ref={ref}
+          value={value}
+          autoFocus={autoFocus}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (mention.handleKeyDown(e)) return
+            if (onSubmit && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); onSubmit() }
+          }}
+          placeholder={placeholder}
+          rows={rows}
+          className="w-full text-sm p-2.5 resize-y focus:outline-none rounded-b-lg bg-surface-0"
+        />
+      ) : (
+        <div className="w-full overflow-auto p-2.5 rounded-b-lg bg-surface-0" style={{ minHeight }}>
+          {value.trim()
+            ? <PostBody body={value} />
+            : <span className="text-sm text-text-tertiary">{t('editor_preview_empty', { defaultValue: 'Rien à prévisualiser' })}</span>}
+        </div>
+      )}
+      {mode === 'write' && mention.picker}
     </div>
   )
 }

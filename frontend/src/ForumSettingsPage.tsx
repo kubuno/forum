@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { MessagesSquare, ArrowLeft, Check, ExternalLink } from 'lucide-react'
-import { Button, Spinner, Toggle, Radio } from '@ui'
+import { Button, Spinner, Toggle, Radio, Input } from '@ui'
 import { forumApi } from './api'
 import PostEditor from './PostEditor'
 import { useModulePrefs } from './userPrefs'
@@ -178,24 +178,94 @@ function ProfileTab() {
   const { t } = useTranslation('forum')
   const { data: profile, isLoading } = useQuery({ queryKey: ['forum-my-profile'], queryFn: forumApi.myProfile })
   const [sig, setSig] = useState('')
-  const [saved, setSaved] = useState(false)
+  const [bio, setBio] = useState('')
+  const [location, setLocation] = useState('')
+  const [website, setWebsite] = useState('')
+  const [customTitle, setCustomTitle] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [savedFlag, setSavedFlag] = useState(false)
 
-  useEffect(() => { if (profile) setSig(profile.signature_md ?? '') }, [profile])
+  useEffect(() => {
+    if (!profile) return
+    setSig(profile.signature_md ?? '')
+    setBio(profile.bio_md ?? '')
+    setLocation(profile.location ?? '')
+    setWebsite(profile.website ?? '')
+    setCustomTitle(profile.custom_title ?? '')
+  }, [profile])
 
   const save = async () => {
-    await forumApi.updateMySignature(sig.trim() || null)
-    setSaved(true); setTimeout(() => setSaved(false), 2000)
+    setBusy(true)
+    try {
+      await forumApi.updateProfile({
+        signature_md: sig.trim(),
+        bio_md: bio.trim(),
+        location: location.trim(),
+        website: website.trim(),
+        custom_title: customTitle.trim(),
+      })
+      setSavedFlag(true)
+      setTimeout(() => setSavedFlag(false), 2500)
+    } finally { setBusy(false) }
   }
 
   if (isLoading) return <div className="py-10 flex justify-center"><Spinner /></div>
   return (
-    <div className="space-y-3 max-w-xl">
-      <div className="text-sm text-text-secondary">{t('member_posts', { count: profile?.post_count ?? 0 })}</div>
-      <label className="block text-xs font-medium text-text-secondary">{t('my_signature')}</label>
-      <PostEditor value={sig} onChange={setSig} rows={4} placeholder={t('signature')} />
-      <div className="flex items-center gap-3">
-        <Button variant="primary" onClick={save}>{t('save')}</Button>
-        {saved && <span className="text-sm text-success">✓</span>}
+    <div>
+      <div className="text-sm text-text-secondary pb-4 border-b border-[#e8eaed]">
+        {t('member_posts', { count: profile?.post_count ?? 0 })}
+      </div>
+
+      <SettingsRow
+        label={t('forum_profile_custom_title', { defaultValue: 'Titre personnalisé' })}
+        description={t('forum_profile_custom_title_desc', { defaultValue: 'Affiché sous votre nom à côté de vos messages.' })}
+      >
+        <Input
+          value={customTitle}
+          onChange={(e) => setCustomTitle(e.target.value)}
+          onBlur={save}
+          placeholder={t('forum_profile_custom_title', { defaultValue: 'Titre personnalisé' })}
+        />
+      </SettingsRow>
+
+      <SettingsRow label={t('forum_profile_location', { defaultValue: 'Localisation' })}>
+        <Input
+          value={location}
+          onChange={(e) => setLocation(e.target.value)}
+          onBlur={save}
+          placeholder={t('forum_profile_location', { defaultValue: 'Localisation' })}
+        />
+      </SettingsRow>
+
+      <SettingsRow label={t('forum_profile_website', { defaultValue: 'Site web' })}>
+        <Input
+          value={website}
+          onChange={(e) => setWebsite(e.target.value)}
+          onBlur={save}
+          placeholder="https://…"
+        />
+      </SettingsRow>
+
+      <SettingsRow
+        label={t('forum_profile_bio', { defaultValue: 'Bio' })}
+        description={t('forum_profile_bio_desc', { defaultValue: 'Une courte présentation visible sur votre profil.' })}
+      >
+        <PostEditor value={bio} onChange={setBio} rows={4} placeholder={t('forum_profile_bio', { defaultValue: 'Bio' })} />
+      </SettingsRow>
+
+      <SettingsRow
+        label={t('my_signature')}
+        description={t('forum_profile_signature_desc', { defaultValue: 'Ajoutée au bas de chacun de vos messages.' })}
+      >
+        <PostEditor value={sig} onChange={setSig} rows={4} placeholder={t('signature')} />
+      </SettingsRow>
+
+      <div className="pt-5 flex items-center gap-3">
+        <Button variant="primary" onClick={save} loading={busy}>
+          {savedFlag
+            ? <><Check size={14} className="mr-1.5 inline" />{t('forum_settings_saved', { defaultValue: 'Enregistré' })}</>
+            : t('forum_settings_save_changes', { defaultValue: 'Enregistrer les modifications' })}
+        </Button>
       </div>
     </div>
   )

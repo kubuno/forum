@@ -27,17 +27,21 @@ validator          = { workspace = true }
 tracing            = { workspace = true }
 tracing-subscriber = { workspace = true }
 kubuno-seccomp     = { workspace = true }
+kubuno-modauth     = { workspace = true }
 thiserror          = { workspace = true }
 anyhow             = { workspace = true }
 uuid               = { workspace = true }
 chrono             = { workspace = true }
 bytes              = { workspace = true }
 futures            = { workspace = true }
+governor           = { workspace = true }
+dashmap            = { workspace = true }
 rand               = { workspace = true }
 base64             = { workspace = true }
 sha2               = { workspace = true }
 toml               = { workspace = true }
 clap               = { workspace = true }
+regex              = { workspace = true }
 
 # ─── Workspace mono-crate (third-party deps copied from the kubuno/core monorepo;
 #     shared crates consumed via tagged git dependencies) ───
@@ -90,6 +94,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tracing-appender   = "0.2"
 tokio-util         = { version = "0.7", features = ["io"] }
 kubuno-seccomp     = { git = "https://github.com/kubuno/core", tag = "seccomp-v0.1.1", package = "kubuno-seccomp" }
+# Verifies the signed identity token minted by the core (trust boundary).
+kubuno-modauth     = { git = "https://github.com/kubuno/core", tag = "modauth-v0.1.0", package = "kubuno-modauth" }
 
 # Errors
 thiserror = "1"
@@ -100,8 +106,12 @@ uuid   = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 bytes   = "1"
 futures = "0.3"
+# Per-user write rate limiting (GCRA algorithm + sharded concurrent map).
+governor = "0.6"
+dashmap  = "6"
 hex     = "0.4"
 toml    = "0.8"
 clap    = { version = "4", features = ["color", "wrap_help", "derive", "env"] }
 url                 = "2"
 urlencoding         = "2"
+regex               = "1"

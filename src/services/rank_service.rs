@@ -3,12 +3,69 @@ use uuid::Uuid;
 
 use crate::{
     errors::{ForumError, Result},
-    models::rank::{CreateRankDto, Rank, UpdateProfileDto, UpdateRankDto, UserProfile},
+    models::rank::{BriefProfile, CreateRankDto, MemberRow, Rank, UpdateProfileDto, UpdateRankDto, UserProfile},
 };
 
 pub struct RankService;
 
 impl RankService {
+    /// A page of the members directory, ordered by post count (default), join
+    /// date or last activity. `sort` comes from a fixed set, never raw input, so
+    /// it is safe to inline into the ORDER BY.
+    pub async fn members_page(
+        sort: &str,
+        limit: i64,
+        offset: i64,
+        db: &PgPool,
+    ) -> Result<(Vec<MemberRow>, i64)> {
+        let order = match sort {
+            "recent" => "p.created_at DESC",
+            "active" => "p.last_seen_at DESC NULLS LAST, p.post_count DESC",
+            _ => "p.post_count DESC, p.created_at DESC",
+        };
+        let rows = sqlx::query_as::<_, MemberRow>(&format!(
+            "SELECT p.user_id, p.post_count, r.title AS rank_title, r.badge AS rank_badge, \
+                    p.last_seen_at, p.created_at \
+               FROM forum.user_profiles p \
+               LEFT JOIN forum.ranks r ON r.id = p.rank_id \
+              ORDER BY {order} LIMIT $1 OFFSET $2"
+        ))
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(db)
+        .await?;
+        let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM forum.user_profiles")
+            .fetch_one(db)
+            .await?;
+        Ok((rows, total))
+    }
+    /// Compact profiles for a batch of users, joined to their rank, for the post
+    /// listing's author column. Missing users simply have no row (a member who
+    /// has never posted has no profile yet). Signatures are stripped unless they
+    /// are enabled instance-wide.
+    pub async fn brief_profiles(
+        uids: &[Uuid],
+        include_signatures: bool,
+        db: &PgPool,
+    ) -> Result<Vec<BriefProfile>> {
+        let mut rows = sqlx::query_as::<_, BriefProfile>(
+            "SELECT p.user_id, p.post_count, p.custom_title,
+                    r.title AS rank_title, r.badge AS rank_badge, p.signature_md
+               FROM forum.user_profiles p
+               LEFT JOIN forum.ranks r ON r.id = p.rank_id
+              WHERE p.user_id = ANY($1)",
+        )
+        .bind(uids)
+        .fetch_all(db)
+        .await?;
+        if !include_signatures {
+            for row in &mut rows {
+                row.signature_md = None;
+            }
+        }
+        Ok(rows)
+    }
+
     // ── Ranks CRUD (admin only) ────────────────────────────────────────────────
 
     pub async fn list(db: &PgPool) -> Result<Vec<Rank>> {
@@ -84,6 +141,37 @@ impl RankService {
              RETURNING *",
         )
         .bind(user_id)
+        .fetch_one(db)
+        .await?;
+        Ok(p)
+    }
+
+    /// Assigns (or clears, with `rank_id = None`) a user's SPECIAL rank —
+    /// admin only, enforced by the handler. Only a rank flagged `is_special`
+    /// may be assigned this way: the non-special ranks are earned
+    /// automatically from post count in `bump_post_count` and stay off-limits
+    /// here to keep that ladder meaningful. Clearing never touches the
+    /// automatic rank — the next post simply reassigns it, same as today when
+    /// `rank_id` is null.
+    pub async fn assign_special(user_id: Uuid, rank_id: Option<Uuid>, db: &PgPool) -> Result<UserProfile> {
+        if let Some(rid) = rank_id {
+            let is_special: Option<bool> =
+                sqlx::query_scalar("SELECT is_special FROM forum.ranks WHERE id = $1")
+                    .bind(rid)
+                    .fetch_optional(db)
+                    .await?;
+            match is_special {
+                Some(true) => {}
+                Some(false) => return Err(ForumError::Validation("this rank is not a special rank".into())),
+                None => return Err(ForumError::NotFound(format!("Rank {rid}"))),
+            }
+        }
+        Self::get_profile(user_id, db).await?; // ensure the row exists
+        let p = sqlx::query_as::<_, UserProfile>(
+            "UPDATE forum.user_profiles SET rank_id = $2 WHERE user_id = $1 RETURNING *",
+        )
+        .bind(user_id)
+        .bind(rank_id)
         .fetch_one(db)
         .await?;
         Ok(p)

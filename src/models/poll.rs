@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use validator::Validate;
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 pub struct Poll {
@@ -29,7 +30,8 @@ pub struct PollResults {
     pub is_closed:    bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Validate)]
 pub struct VoteDto {
+    #[validate(length(min = 1, max = 20))]
     pub option_ids: Vec<Uuid>,
 }

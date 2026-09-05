@@ -29,6 +29,7 @@ pub async fn react(
     }
     let post = PostService::get(post_id, &state.db).await?;
     PermissionService::assert_can_view(post.forum_id, &user, &state.db).await?;
+    crate::services::moderation_service::ModerationService::assert_not_banned(user.id, &state.db).await?;
 
     let (added, reactions) = ReactionService::toggle(post_id, user.id, &dto.emoji, &state.db).await?;
 
@@ -39,6 +40,26 @@ pub async fn react(
         ).await;
     }
     Ok(Json(json!({ "added": added, "reactions": reactions })))
+}
+
+/// GET /posts/:id/reactions/users — who reacted, grouped by emoji (up to 50
+/// users each). Reuses the exact same visibility gate as reading the post
+/// itself (SEC-02): a post still waiting for approval or removed by
+/// moderation stays hidden from everyone but its author and the moderators,
+/// including through this endpoint.
+pub async fn users_for_post(
+    State(state): State<AppState>,
+    Extension(user): Extension<ForumUser>,
+    Path(post_id): Path<Uuid>,
+) -> Result<Json<Value>> {
+    let post = PostService::get(post_id, &state.db).await?;
+    let perms = PermissionService::assert_can_view(post.forum_id, &user, &state.db).await?;
+    let is_mod = perms.is_admin || perms.is_moderator;
+    if (!post.is_approved || post.is_deleted) && post.author_id != user.id && !is_mod {
+        return Err(ForumError::NotFound(format!("Post {post_id}")));
+    }
+    let reactions = ReactionService::users_for_post(post_id, &state.db).await?;
+    Ok(Json(json!({ "reactions": reactions })))
 }
 
 /// GET /topics/:id/reactions — per-post aggregates for the whole topic.

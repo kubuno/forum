@@ -1,0 +1,127 @@
+/* Syntax highlighting for fenced code blocks, rendered via rehype-highlight
+ * (highlight.js token classes, e.g. `.hljs-keyword`). Scoped to the forum
+ * module area only, kept sober and legible in both light and dark
+ * (`prefers-color-scheme`) — the forum module has no app-wide dark theme yet,
+ * so this stays self-contained rather than depending on tokens that don't exist. */
+
+[data-module="forum"] .hljs {
+  color: var(--color-text-primary);
+  background: transparent;
+}
+
+[data-module="forum"] .hljs-comment,
+[data-module="forum"] .hljs-quote {
+  color: var(--color-text-tertiary);
+  font-style: italic;
+}
+
+[data-module="forum"] .hljs-keyword,
+[data-module="forum"] .hljs-selector-tag,
+[data-module="forum"] .hljs-literal,
+[data-module="forum"] .hljs-subst {
+  color: #ab47bc;
+}
+
+[data-module="forum"] .hljs-string,
+[data-module="forum"] .hljs-doctag,
+[data-module="forum"] .hljs-addition {
+  color: #1e8e3e;
+}
+
+[data-module="forum"] .hljs-title,
+[data-module="forum"] .hljs-section,
+[data-module="forum"] .hljs-selector-id,
+[data-module="forum"] .hljs-built_in,
+[data-module="forum"] .hljs-builtin-name {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+[data-module="forum"] .hljs-type,
+[data-module="forum"] .hljs-class .hljs-title,
+[data-module="forum"] .hljs-tag,
+[data-module="forum"] .hljs-name {
+  color: #1a73e8;
+}
+
+[data-module="forum"] .hljs-number,
+[data-module="forum"] .hljs-symbol,
+[data-module="forum"] .hljs-bullet {
+  color: #e8710a;
+}
+
+[data-module="forum"] .hljs-attribute,
+[data-module="forum"] .hljs-attr,
+[data-module="forum"] .hljs-variable,
+[data-module="forum"] .hljs-template-variable {
+  color: #b06000;
+}
+
+[data-module="forum"] .hljs-deletion {
+  color: var(--color-danger);
+}
+
+[data-module="forum"] .hljs-emphasis {
+  font-style: italic;
+}
+
+[data-module="forum"] .hljs-strong {
+  font-weight: 700;
+}
+
+[data-module="forum"] .hljs-link {
+  text-decoration: underline;
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-module="forum"] .hljs {
+    color: #e6e6e6;
+  }
+
+  [data-module="forum"] .hljs-comment,
+  [data-module="forum"] .hljs-quote {
+    color: #9aa0a6;
+  }
+
+  [data-module="forum"] .hljs-keyword,
+  [data-module="forum"] .hljs-selector-tag,
+  [data-module="forum"] .hljs-literal,
+  [data-module="forum"] .hljs-subst {
+    color: #c792ea;
+  }
+
+  [data-module="forum"] .hljs-string,
+  [data-module="forum"] .hljs-doctag,
+  [data-module="forum"] .hljs-addition {
+    color: #81c995;
+  }
+
+  [data-module="forum"] .hljs-title,
+  [data-module="forum"] .hljs-section,
+  [data-module="forum"] .hljs-selector-id,
+  [data-module="forum"] .hljs-built_in,
+  [data-module="forum"] .hljs-builtin-name,
+  [data-module="forum"] .hljs-type,
+  [data-module="forum"] .hljs-class .hljs-title,
+  [data-module="forum"] .hljs-tag,
+  [data-module="forum"] .hljs-name {
+    color: #8ab4f8;
+  }
+
+  [data-module="forum"] .hljs-number,
+  [data-module="forum"] .hljs-symbol,
+  [data-module="forum"] .hljs-bullet {
+    color: #fcc934;
+  }
+
+  [data-module="forum"] .hljs-attribute,
+  [data-module="forum"] .hljs-attr,
+  [data-module="forum"] .hljs-variable,
+  [data-module="forum"] .hljs-template-variable {
+    color: #f2b94a;
+  }
+
+  [data-module="forum"] .hljs-deletion {
+    color: #f28b82;
+  }
+}

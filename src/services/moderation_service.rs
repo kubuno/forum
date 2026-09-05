@@ -1,13 +1,13 @@
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, QueryBuilder};
 use uuid::Uuid;
 
 use crate::{
     errors::{ForumError, Result},
     models::moderation::{
-        Ban, CreateReportDto, ModLogEntry, ModNote, Moderator, PendingPost, Report,
-        ResolveReportDto, Warning,
+        Ban, CreateReportDto, CreateReportReasonDto, EmailBan, IpBan, ModLogEntry, ModNote,
+        Moderator, PendingPost, Report, ReportReason, ResolveReportDto, Warning,
     },
-    services::{aggregates, rank_service::RankService},
+    services::{aggregates, ban_registry::BanRegistry, rank_service::RankService},
 };
 
 pub struct ModerationService;
@@ -24,32 +24,80 @@ impl ModerationService {
         if exists.is_none() {
             return Err(ForumError::NotFound(format!("Post {post_id}")));
         }
+        // SEC-15: one open report per (post, reporter). A repeat while the first
+        // is still open is a no-op, reported back as a clean conflict rather than
+        // piling identical rows onto the moderators' queue. 'open' is the actual
+        // open state — the reports CHECK never allowed 'pending' (see 000009).
         let row = sqlx::query_as::<_, Report>(
-            "INSERT INTO forum.reports (post_id, reporter_id, reason)
-             VALUES ($1, $2, $3) RETURNING *",
+            "INSERT INTO forum.reports (post_id, reporter_id, reason, reason_id)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (post_id, reporter_id) WHERE status = 'open' DO NOTHING
+             RETURNING *",
         )
         .bind(post_id)
         .bind(reporter_id)
         .bind(&dto.reason)
-        .fetch_one(db)
-        .await?;
+        .bind(dto.reason_id)
+        .fetch_optional(db)
+        .await?
+        .ok_or_else(|| ForumError::Conflict("you have already reported this post".into()))?;
         Ok(row)
     }
 
-    pub async fn list_reports(status: Option<String>, db: &PgPool) -> Result<Vec<Report>> {
-        let rows = match status {
-            Some(s) => sqlx::query_as::<_, Report>(
-                "SELECT * FROM forum.reports WHERE status = $1 ORDER BY created_at DESC",
-            )
-            .bind(s)
-            .fetch_all(db)
-            .await?,
-            None => sqlx::query_as::<_, Report>(
-                "SELECT * FROM forum.reports ORDER BY created_at DESC",
-            )
-            .fetch_all(db)
-            .await?,
-        };
+    // ── Predefined report reasons (admin-curated chip list) ──────────────────────
+
+    pub async fn list_report_reasons(db: &PgPool) -> Result<Vec<ReportReason>> {
+        let rows = sqlx::query_as::<_, ReportReason>(
+            "SELECT * FROM forum.report_reasons ORDER BY position, created_at",
+        )
+        .fetch_all(db)
+        .await?;
+        Ok(rows)
+    }
+
+    pub async fn create_report_reason(dto: CreateReportReasonDto, db: &PgPool) -> Result<ReportReason> {
+        let reason = sqlx::query_as::<_, ReportReason>(
+            "INSERT INTO forum.report_reasons (title, description, position)
+             VALUES ($1, $2, $3) RETURNING *",
+        )
+        .bind(dto.title.trim())
+        .bind(dto.description.as_deref().map(str::trim).filter(|s| !s.is_empty()))
+        .bind(dto.position)
+        .fetch_one(db)
+        .await?;
+        Ok(reason)
+    }
+
+    pub async fn delete_report_reason(id: Uuid, db: &PgPool) -> Result<()> {
+        let r = sqlx::query("DELETE FROM forum.report_reasons WHERE id = $1")
+            .bind(id)
+            .execute(db)
+            .await?;
+        if r.rows_affected() == 0 {
+            return Err(ForumError::NotFound(format!("Report reason {id}")));
+        }
+        Ok(())
+    }
+
+    /// Lists reports. `forum_ids = None` means every forum (administrators);
+    /// otherwise only reports on posts in the forums the caller moderates, so a
+    /// moderator of one board never sees another's queue (SEC-06).
+    pub async fn list_reports(
+        status: Option<String>,
+        forum_ids: Option<&[Uuid]>,
+        db: &PgPool,
+    ) -> Result<Vec<Report>> {
+        let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
+            "SELECT r.* FROM forum.reports r JOIN forum.posts p ON p.id = r.post_id WHERE TRUE",
+        );
+        if let Some(s) = &status {
+            qb.push(" AND r.status = ").push_bind(s);
+        }
+        if let Some(ids) = forum_ids {
+            qb.push(" AND p.forum_id = ANY(").push_bind(ids).push(")");
+        }
+        qb.push(" ORDER BY r.created_at DESC");
+        let rows = qb.build_query_as::<Report>().fetch_all(db).await?;
         Ok(rows)
     }
 
@@ -134,13 +182,25 @@ impl ModerationService {
         }
     }
 
-    pub async fn list_log(limit: i64, db: &PgPool) -> Result<Vec<ModLogEntry>> {
-        let rows = sqlx::query_as::<_, ModLogEntry>(
-            "SELECT * FROM forum.mod_log ORDER BY created_at DESC LIMIT $1",
-        )
-        .bind(limit.clamp(1, 200))
-        .fetch_all(db)
-        .await?;
+    /// Lists the moderation log. `forum_ids = None` is every forum (admins);
+    /// otherwise entries for the caller's forums, plus their own actions so a
+    /// moderator can always audit what they themselves did (SEC-06).
+    pub async fn list_log(
+        limit: i64,
+        forum_ids: Option<&[Uuid]>,
+        self_id: Uuid,
+        db: &PgPool,
+    ) -> Result<Vec<ModLogEntry>> {
+        let mut qb: QueryBuilder<Postgres> = QueryBuilder::new("SELECT * FROM forum.mod_log");
+        if let Some(ids) = forum_ids {
+            qb.push(" WHERE (forum_id = ANY(")
+                .push_bind(ids)
+                .push(") OR moderator_id = ")
+                .push_bind(self_id)
+                .push(")");
+        }
+        qb.push(" ORDER BY created_at DESC LIMIT ").push_bind(limit.clamp(1, 200));
+        let rows = qb.build_query_as::<ModLogEntry>().fetch_all(db).await?;
         Ok(rows)
     }
 
@@ -172,6 +232,12 @@ impl ModerationService {
     // ── Bans (forum-wide) ─────────────────────────────────────────────────────
 
     pub async fn ban(user_id: Uuid, by: Uuid, reason: Option<&str>, days: Option<i64>, db: &PgPool) -> Result<Ban> {
+        // A moderator cannot lock themselves out (SEC-25). Protecting a platform
+        // founder/super-admin from being banned needs the core to say who that is,
+        // and is left for the group work that exposes such attributes to modules.
+        if user_id == by {
+            return Err(ForumError::Validation("you cannot ban yourself".into()));
+        }
         let until = days.map(|d| chrono::Utc::now() + chrono::Duration::days(d));
         let b = sqlx::query_as::<_, Ban>(
             "INSERT INTO forum.user_bans (user_id, banned_by, reason, until) VALUES ($1, $2, $3, $4)
@@ -185,6 +251,7 @@ impl ModerationService {
         .fetch_one(db)
         .await?;
         Self::log(by, "ban", None, None, None, Some(user_id), reason, db).await;
+        BanRegistry::reload(db).await?;
         Ok(b)
     }
 
@@ -194,6 +261,7 @@ impl ModerationService {
             .execute(db)
             .await?;
         Self::log(by, "unban", None, None, None, Some(user_id), None, db).await;
+        BanRegistry::reload(db).await?;
         Ok(())
     }
 
@@ -204,15 +272,116 @@ impl ModerationService {
         Ok(rows)
     }
 
-    /// Returns true if the user is currently banned (respecting expiry).
-    pub async fn is_banned(user_id: Uuid, db: &PgPool) -> Result<bool> {
-        let n: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM forum.user_bans WHERE user_id = $1 AND (until IS NULL OR until > NOW())",
+    /// Rejects a write from a currently-banned user. For the public write paths
+    /// (reacting, reporting, voting) that previously checked nothing, so a ban
+    /// only stopped new posts and topics while everything else stayed open (SEC-13).
+    /// Kept as defense-in-depth alongside `middleware::enforce_ban`, which is the
+    /// primary enforcement point for every authenticated route.
+    pub async fn assert_not_banned(user_id: Uuid, db: &PgPool) -> Result<()> {
+        if Self::is_banned(user_id, db).await? {
+            return Err(ForumError::Forbidden);
+        }
+        Ok(())
+    }
+
+    /// Returns true if the user is currently banned (respecting expiry), read
+    /// from the in-memory `BanRegistry` — no database round trip. `db` is kept
+    /// in the signature only for call-site compatibility.
+    pub async fn is_banned(user_id: Uuid, _db: &PgPool) -> Result<bool> {
+        Ok(BanRegistry::is_user_banned(user_id))
+    }
+
+    // ── IP bans (admin only, phpBB-style, exact match) ────────────────────────
+
+    pub async fn ban_ip(value: &str, by: Uuid, reason: Option<&str>, days: Option<i64>, db: &PgPool) -> Result<IpBan> {
+        let ip: std::net::IpAddr = value
+            .trim()
+            .parse()
+            .map_err(|_| ForumError::Validation(format!("invalid IP address: {value}")))?;
+        let canonical = ip.to_string();
+        let until = days.map(|d| chrono::Utc::now() + chrono::Duration::days(d));
+        let b = sqlx::query_as::<_, IpBan>(
+            "INSERT INTO forum.ip_bans (value, banned_by, reason, until) VALUES ($1, $2, $3, $4)
+             ON CONFLICT (value) DO UPDATE SET banned_by = EXCLUDED.banned_by, reason = EXCLUDED.reason, until = EXCLUDED.until, created_at = NOW()
+             RETURNING *",
         )
-        .bind(user_id)
+        .bind(&canonical)
+        .bind(by)
+        .bind(reason)
+        .bind(until)
         .fetch_one(db)
-        .await?;
-        Ok(n > 0)
+        .await
+        .inspect_err(|e| tracing::error!(error = %e, "Banning an IP address"))?;
+        Self::log(by, "ban_ip", None, None, None, None, Some(&canonical), db).await;
+        BanRegistry::reload(db).await?;
+        Ok(b)
+    }
+
+    pub async fn unban_ip(id: Uuid, db: &PgPool) -> Result<()> {
+        let r = sqlx::query("DELETE FROM forum.ip_bans WHERE id = $1")
+            .bind(id)
+            .execute(db)
+            .await
+            .inspect_err(|e| tracing::error!(error = %e, %id, "Removing an IP ban"))?;
+        if r.rows_affected() == 0 {
+            return Err(ForumError::NotFound(format!("IP ban {id}")));
+        }
+        BanRegistry::reload(db).await?;
+        Ok(())
+    }
+
+    pub async fn list_ip_bans(db: &PgPool) -> Result<Vec<IpBan>> {
+        let rows = sqlx::query_as::<_, IpBan>("SELECT * FROM forum.ip_bans ORDER BY created_at DESC")
+            .fetch_all(db)
+            .await
+            .inspect_err(|e| tracing::error!(error = %e, "Listing IP bans"))?;
+        Ok(rows)
+    }
+
+    // ── Email bans (admin only, phpBB-style, exact match) ─────────────────────
+
+    pub async fn ban_email(email: &str, by: Uuid, reason: Option<&str>, days: Option<i64>, db: &PgPool) -> Result<EmailBan> {
+        let normalized = email.trim().to_lowercase();
+        if normalized.is_empty() || !normalized.contains('@') {
+            return Err(ForumError::Validation(format!("invalid email address: {email}")));
+        }
+        let until = days.map(|d| chrono::Utc::now() + chrono::Duration::days(d));
+        let b = sqlx::query_as::<_, EmailBan>(
+            "INSERT INTO forum.email_bans (email, banned_by, reason, until) VALUES ($1, $2, $3, $4)
+             ON CONFLICT (email) DO UPDATE SET banned_by = EXCLUDED.banned_by, reason = EXCLUDED.reason, until = EXCLUDED.until, created_at = NOW()
+             RETURNING *",
+        )
+        .bind(&normalized)
+        .bind(by)
+        .bind(reason)
+        .bind(until)
+        .fetch_one(db)
+        .await
+        .inspect_err(|e| tracing::error!(error = %e, "Banning an email address"))?;
+        Self::log(by, "ban_email", None, None, None, None, Some(&normalized), db).await;
+        BanRegistry::reload(db).await?;
+        Ok(b)
+    }
+
+    pub async fn unban_email(id: Uuid, db: &PgPool) -> Result<()> {
+        let r = sqlx::query("DELETE FROM forum.email_bans WHERE id = $1")
+            .bind(id)
+            .execute(db)
+            .await
+            .inspect_err(|e| tracing::error!(error = %e, %id, "Removing an email ban"))?;
+        if r.rows_affected() == 0 {
+            return Err(ForumError::NotFound(format!("Email ban {id}")));
+        }
+        BanRegistry::reload(db).await?;
+        Ok(())
+    }
+
+    pub async fn list_email_bans(db: &PgPool) -> Result<Vec<EmailBan>> {
+        let rows = sqlx::query_as::<_, EmailBan>("SELECT * FROM forum.email_bans ORDER BY created_at DESC")
+            .fetch_all(db)
+            .await
+            .inspect_err(|e| tracing::error!(error = %e, "Listing email bans"))?;
+        Ok(rows)
     }
 
     // ── Private moderator notes ────────────────────────────────────────────────

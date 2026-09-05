@@ -1,8 +1,9 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     Extension, Json,
 };
+use serde::Deserialize;
 use serde_json::{json, Value};
 use uuid::Uuid;
 use validator::Validate;
@@ -12,8 +13,8 @@ use crate::{
     middleware::ForumUser,
     models::rank::{CreateRankDto, UpdateProfileDto, UpdateRankDto, UserProfile},
     services::{
-        engagement_service::EngagementService, permission_service::PermissionService,
-        rank_service::RankService,
+        engagement_service::EngagementService, moderation_service::ModerationService,
+        permission_service::PermissionService, rank_service::RankService,
     },
     state::AppState,
 };
@@ -58,6 +59,27 @@ pub async fn delete(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[derive(Debug, Deserialize)]
+pub struct AssignRankDto {
+    /// The special rank to assign, or `None` to clear it.
+    pub rank_id: Option<Uuid>,
+}
+
+/// PATCH /profiles/:uid/rank — admin only. Sets a user's manually-assigned
+/// SPECIAL rank (`RankService::assign_special` rejects a non-special one).
+pub async fn assign_rank(
+    State(state): State<AppState>,
+    Extension(user): Extension<ForumUser>,
+    Path(uid): Path<Uuid>,
+    Json(dto): Json<AssignRankDto>,
+) -> Result<Json<Value>> {
+    PermissionService::assert_admin(&user)?;
+    let profile = RankService::assign_special(uid, dto.rank_id, &state.db).await?;
+    let details = if dto.rank_id.is_some() { "special rank assigned" } else { "special rank cleared" };
+    ModerationService::log(user.id, "rank_assign", None, None, None, Some(uid), Some(details), &state.db).await;
+    Ok(Json(json!({ "profile": profile })))
+}
+
 // ── Profiles ──────────────────────────────────────────────────────────────────
 
 /// Blanks the signature when the instance has turned signatures off.
@@ -77,6 +99,32 @@ pub async fn get_profile(State(state): State<AppState>, Path(uid): Path<Uuid>) -
     apply_signature_policy(&mut profile, state.instance().allow_signatures);
     let topics = crate::services::topic_service::TopicService::by_author(uid, 10, &state.db).await?;
     Ok(Json(json!({ "profile": profile, "topics": topics })))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BriefQuery {
+    /// Comma-separated user ids.
+    pub ids: Option<String>,
+}
+
+/// GET /profiles/brief?ids=uid1,uid2 — compact profiles for a post listing's
+/// author column, resolved in one request instead of one per author.
+pub async fn brief_profiles(
+    State(state): State<AppState>,
+    Query(q): Query<BriefQuery>,
+) -> Result<Json<Value>> {
+    let ids: Vec<Uuid> = q
+        .ids
+        .unwrap_or_default()
+        .split(',')
+        .filter_map(|s| Uuid::parse_str(s.trim()).ok())
+        .take(100)
+        .collect();
+    if ids.is_empty() {
+        return Ok(Json(json!({ "profiles": [] })));
+    }
+    let profiles = RankService::brief_profiles(&ids, state.instance().allow_signatures, &state.db).await?;
+    Ok(Json(json!({ "profiles": profiles })))
 }
 
 /// GET /profiles/:uid/activity — a user's recent posts.

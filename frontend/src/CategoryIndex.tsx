@@ -1,8 +1,8 @@
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { useQuery } from '@tanstack/react-query'
-import { MessagesSquare, Lock, MessageSquare } from 'lucide-react'
-import { Spinner } from '@ui'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { MessagesSquare, Lock, MessageSquare, CheckCheck } from 'lucide-react'
+import { Spinner, Button } from '@ui'
 import { forumApi, type Forum } from './api'
 import { useResolveUsers } from './users'
 import { AuthorName } from './Author'
@@ -11,11 +11,17 @@ import { timeAgo } from './helpers'
 export default function CategoryIndex() {
   const { t } = useTranslation('forum')
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   const { data: categories = [], isLoading: lc } = useQuery({ queryKey: ['forum-categories'], queryFn: forumApi.listCategories })
   const { data: forums = [], isLoading: lf } = useQuery({ queryKey: ['forum-forums'], queryFn: () => forumApi.listForums() })
 
   useResolveUsers(forums.map(f => f.last_post_user_id))
+
+  const markAllRead = async () => {
+    await forumApi.markAllRead()
+    queryClient.invalidateQueries({ queryKey: ['forum-readstate'] })
+  }
 
   if (lc || lf) {
     return <div className="h-full flex items-center justify-center"><Spinner size="lg" /></div>
@@ -30,6 +36,13 @@ export default function CategoryIndex() {
       <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
         {categories.length === 0 && (
           <div className="text-center text-text-secondary py-20">{t('no_forums')}</div>
+        )}
+        {categories.length > 0 && (
+          <div className="flex justify-end">
+            <Button variant="ghost" icon={<CheckCheck size={16} />} onClick={markAllRead}>
+              {t('mark_all_read', { defaultValue: 'Mark all read' })}
+            </Button>
+          </div>
         )}
         {categories.map(cat => (
           <section key={cat.id} className="rounded-xl border border-border overflow-hidden bg-surface-0">

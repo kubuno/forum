@@ -21,7 +21,8 @@ pub struct CreateTagDto {
     pub color: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Validate)]
 pub struct SetTopicTagsDto {
+    #[validate(length(max = 10))]
     pub tag_ids: Vec<Uuid>,
 }

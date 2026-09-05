@@ -54,6 +54,7 @@ pub async fn set_for_topic(
     Path(id): Path<Uuid>,
     Json(dto): Json<SetTopicTagsDto>,
 ) -> Result<Json<Value>> {
+    dto.validate().map_err(|e| ForumError::Validation(e.to_string()))?;
     let topic = TopicService::get(id, &state.db).await?;
     let perms = PermissionService::effective(topic.forum_id, &user, &state.db).await?;
     if topic.author_id != user.id && !perms.is_admin && !perms.is_moderator {

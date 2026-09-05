@@ -1,5 +1,6 @@
 use crate::config::instance::InstanceConfig;
 use crate::config::Settings;
+use crate::middleware::WriteRateLimiter;
 use sqlx::PgPool;
 use std::sync::{Arc, RwLock};
 
@@ -11,6 +12,8 @@ pub struct AppState {
     /// an edit takes effect without restarting the module. Read through
     /// [`AppState::instance`], never locked directly by callers.
     pub instance: Arc<RwLock<InstanceConfig>>,
+    /// Per-user write rate limiter, shared across every request (SEC-09).
+    pub rate_limiter: WriteRateLimiter,
 }
 
 impl AppState {

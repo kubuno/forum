@@ -5,7 +5,7 @@ use crate::{
     config::instance::InstanceConfig,
     errors::{ForumError, Result},
     middleware::ForumUser,
-    models::post::{CreatePostDto, Post, UpdatePostDto},
+    models::post::{CreatePostDto, Post, PostRevision, UpdatePostDto},
     services::{aggregates, permission_service::PermissionService, rank_service::RankService},
 };
 
@@ -155,6 +155,10 @@ impl PostService {
         db: &PgPool,
     ) -> Result<Post> {
         let post = Self::get(id, db).await?;
+        // A message removed by moderation is not editable back into existence.
+        if post.is_deleted {
+            return Err(ForumError::NotFound(format!("Post {id}")));
+        }
         let perms = PermissionService::effective(post.forum_id, user, db).await?;
         let is_mod = perms.is_admin || perms.is_moderator;
         if post.author_id != user.id && !is_mod {
@@ -171,6 +175,22 @@ impl PostService {
             }
         }
 
+        // Archive the version being overwritten (its body plus whoever produced
+        // it) before touching the row, in the same transaction as the update so
+        // an edit is never recorded without its predecessor being preserved.
+        let mut tx = db.begin().await?;
+
+        sqlx::query(
+            "INSERT INTO forum.post_revisions (post_id, body_md, edited_by, edit_reason)
+             VALUES ($1, $2, $3, $4)",
+        )
+        .bind(id)
+        .bind(&post.body_md)
+        .bind(post.edited_by)
+        .bind(&post.edit_reason)
+        .execute(&mut *tx)
+        .await?;
+
         let row = sqlx::query_as::<_, Post>(
             "UPDATE forum.posts SET
                 body_md     = $2,
@@ -184,9 +204,23 @@ impl PostService {
         .bind(&dto.body_md)
         .bind(user.id)
         .bind(&dto.edit_reason)
-        .fetch_one(db)
+        .fetch_one(&mut *tx)
         .await?;
+
+        tx.commit().await?;
         Ok(row)
+    }
+
+    /// Edit history of a post, newest first. Access control is the caller's
+    /// job (see `handlers::posts::list_revisions`).
+    pub async fn list_revisions(post_id: Uuid, db: &PgPool) -> Result<Vec<PostRevision>> {
+        let rows = sqlx::query_as::<_, PostRevision>(
+            "SELECT * FROM forum.post_revisions WHERE post_id = $1 ORDER BY created_at DESC",
+        )
+        .bind(post_id)
+        .fetch_all(db)
+        .await?;
+        Ok(rows)
     }
 
     pub async fn delete(id: Uuid, user: &ForumUser, db: &PgPool) -> Result<()> {

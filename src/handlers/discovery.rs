@@ -34,5 +34,6 @@ pub async fn feed(
     ).await?;
     let ids: Vec<Uuid> = topics.iter().map(|t| t.id).collect();
     let tags = TagService::for_topics(&ids, &state.db).await?;
-    Ok(Json(json!({ "topics": topics, "tags": tags })))
+    let total = TopicService::feed_count(kind, user.id, q.solved, q.tag, &state.db).await?;
+    Ok(Json(json!({ "topics": topics, "tags": tags, "total": total })))
 }

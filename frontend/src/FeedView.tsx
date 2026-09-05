@@ -1,38 +1,47 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { MessageSquare, Eye, CheckCircle2, Clock } from 'lucide-react'
 import { Spinner } from '@ui'
 import { forumApi, type Tag, type Topic } from './api'
 import { useResolveUsers } from './users'
 import { AuthorName } from './Author'
 import { timeAgo } from './helpers'
+import Pagination from './Pagination'
 
 const TITLES: Record<string, string> = {
   recent: 'feed_recent', unanswered: 'feed_unanswered', popular: 'feed_popular',
   unread: 'feed_unread', mine: 'feed_mine', bookmarks: 'feed_bookmarks',
 }
 
+const TOPICS_PER_PAGE = 30
+
 /** Cross-forum discovery list (recent / unanswered / popular / unread / mine / bookmarks). */
 export default function FeedView() {
   const { t } = useTranslation('forum')
   const navigate = useNavigate()
   const { kind = 'recent' } = useParams()
+  const [page, setPage] = useState(1)
+
+  // A different feed kind starts back at its first page.
+  useEffect(() => { setPage(1) }, [kind])
 
   const { data, isLoading } = useQuery({
-    queryKey: ['forum-feed', kind],
-    queryFn: async (): Promise<{ topics: Topic[]; tags: Record<string, Tag[]> }> => {
+    queryKey: ['forum-feed', kind, page],
+    queryFn: async (): Promise<{ topics: Topic[]; tags: Record<string, Tag[]>; total: number }> => {
       if (kind === 'bookmarks') {
         const topics = await forumApi.listBookmarks()
-        return { topics, tags: {} }
+        return { topics, tags: {}, total: topics.length }
       }
-      return forumApi.feed(kind, { limit: 50 })
+      return forumApi.feed(kind, { limit: TOPICS_PER_PAGE, offset: (page - 1) * TOPICS_PER_PAGE })
     },
+    placeholderData: keepPreviousData,
   })
 
   const topics = useMemo(() => data?.topics ?? [], [data])
   const tags = data?.tags ?? {}
+  const total = data?.total ?? 0
   useResolveUsers(topics.map(tp => tp.last_post_user_id ?? tp.author_id))
 
   return (
@@ -68,6 +77,7 @@ export default function FeedView() {
             ))}
           </div>
         )}
+        {kind !== 'bookmarks' && <Pagination page={page} pageSize={TOPICS_PER_PAGE} total={total} onPage={setPage} />}
       </div>
     </div>
   )

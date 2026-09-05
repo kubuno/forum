@@ -15,13 +15,21 @@ use crate::{
     state::AppState,
 };
 
-pub async fn list(State(state): State<AppState>) -> Result<Json<Value>> {
-    let categories = CategoryService::list(&state.db).await?;
+pub async fn list(
+    State(state): State<AppState>,
+    Extension(user): Extension<ForumUser>,
+) -> Result<Json<Value>> {
+    let categories = CategoryService::list(&user, &state.db).await?;
     Ok(Json(json!({ "categories": categories })))
 }
 
-pub async fn get(State(state): State<AppState>, Path(id): Path<Uuid>) -> Result<Json<Value>> {
+pub async fn get(
+    State(state): State<AppState>,
+    Extension(user): Extension<ForumUser>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<Value>> {
     let category = CategoryService::get(id, &state.db).await?;
+    CategoryService::assert_visible(&user, id, &state.db).await?;
     Ok(Json(json!({ "category": category })))
 }
 

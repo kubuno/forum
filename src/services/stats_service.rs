@@ -39,6 +39,9 @@ impl StatsService {
     }
 
     /// Latest active members (by first forum activity).
+    // Kept for the home "latest members / top contributors" widgets (V8); the
+    // paginated members directory now covers the full list.
+    #[allow(dead_code)]
     pub async fn latest_members(limit: i64, db: &PgPool) -> Result<Vec<Uuid>> {
         let ids = sqlx::query_scalar::<_, Uuid>(
             "SELECT user_id FROM forum.user_profiles ORDER BY created_at DESC LIMIT $1",

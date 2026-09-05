@@ -195,6 +195,20 @@ async fn main() -> Result<()> {
             .context("Migrations")?;
     }
 
+    // Word censor: load the admin's list into memory once at boot, so the very
+    // first post rendered is already censored. Best-effort — a failed load must
+    // never block startup; the cache just stays empty until the next successful
+    // reload (any admin write to the list retries it).
+    if let Err(e) = kubuno_forum::services::censor_service::CensorService::reload(&pool).await {
+        tracing::warn!(error = %e, "censored words: initial load failed");
+    }
+
+    // Ban registry (account/IP/email, phpBB-style): same best-effort load, so the
+    // very first request already enforces whatever the admin has already banned.
+    if let Err(e) = kubuno_forum::services::ban_registry::BanRegistry::reload(&pool).await {
+        tracing::warn!(error = %e, "ban registry: initial load failed");
+    }
+
     let http = Client::new();
 
     // Instance settings: compiled defaults, then one read from the core so the
@@ -212,6 +226,9 @@ async fn main() -> Result<()> {
         db:       pool,
         settings: Arc::new(settings.clone()),
         instance: instance.clone(),
+        // 120 write requests per user per minute: generous for a person clicking
+        // through the UI, a hard ceiling against a scripted flood (SEC-09).
+        rate_limiter: kubuno_forum::middleware::WriteRateLimiter::per_minute(120),
     };
 
     // Register with the core (infinite retry)

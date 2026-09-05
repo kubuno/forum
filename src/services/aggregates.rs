@@ -33,11 +33,11 @@ pub fn slugify(input: &str) -> String {
 pub async fn recompute_topic(conn: &mut PgConnection, topic_id: Uuid) -> Result<()> {
     sqlx::query(
         "UPDATE forum.topics t SET
-            reply_count       = GREATEST((SELECT COUNT(*) FROM forum.posts p WHERE p.topic_id = t.id AND p.is_approved) - 1, 0),
-            first_post_id     = (SELECT p.id FROM forum.posts p WHERE p.topic_id = t.id AND p.is_approved ORDER BY p.created_at, p.id LIMIT 1),
-            last_post_id      = (SELECT p.id FROM forum.posts p WHERE p.topic_id = t.id AND p.is_approved ORDER BY p.created_at DESC, p.id DESC LIMIT 1),
-            last_post_at      = (SELECT p.created_at FROM forum.posts p WHERE p.topic_id = t.id AND p.is_approved ORDER BY p.created_at DESC, p.id DESC LIMIT 1),
-            last_post_user_id = (SELECT p.author_id FROM forum.posts p WHERE p.topic_id = t.id AND p.is_approved ORDER BY p.created_at DESC, p.id DESC LIMIT 1)
+            reply_count       = GREATEST((SELECT COUNT(*) FROM forum.posts p WHERE p.topic_id = t.id AND p.is_approved AND NOT p.is_deleted) - 1, 0),
+            first_post_id     = (SELECT p.id FROM forum.posts p WHERE p.topic_id = t.id AND p.is_approved AND NOT p.is_deleted ORDER BY p.created_at, p.id LIMIT 1),
+            last_post_id      = (SELECT p.id FROM forum.posts p WHERE p.topic_id = t.id AND p.is_approved AND NOT p.is_deleted ORDER BY p.created_at DESC, p.id DESC LIMIT 1),
+            last_post_at      = (SELECT p.created_at FROM forum.posts p WHERE p.topic_id = t.id AND p.is_approved AND NOT p.is_deleted ORDER BY p.created_at DESC, p.id DESC LIMIT 1),
+            last_post_user_id = (SELECT p.author_id FROM forum.posts p WHERE p.topic_id = t.id AND p.is_approved AND NOT p.is_deleted ORDER BY p.created_at DESC, p.id DESC LIMIT 1)
          WHERE t.id = $1",
     )
     .bind(topic_id)
@@ -51,11 +51,11 @@ pub async fn recompute_topic(conn: &mut PgConnection, topic_id: Uuid) -> Result<
 pub async fn recompute_forum(conn: &mut PgConnection, forum_id: Uuid) -> Result<()> {
     sqlx::query(
         "UPDATE forum.forums f SET
-            topic_count       = (SELECT COUNT(*) FROM forum.topics t WHERE t.forum_id = f.id AND t.is_approved),
-            post_count        = (SELECT COUNT(*) FROM forum.posts  p WHERE p.forum_id = f.id AND p.is_approved),
-            last_post_id      = (SELECT p.id FROM forum.posts p WHERE p.forum_id = f.id AND p.is_approved ORDER BY p.created_at DESC, p.id DESC LIMIT 1),
-            last_post_at      = (SELECT p.created_at FROM forum.posts p WHERE p.forum_id = f.id AND p.is_approved ORDER BY p.created_at DESC, p.id DESC LIMIT 1),
-            last_post_user_id = (SELECT p.author_id FROM forum.posts p WHERE p.forum_id = f.id AND p.is_approved ORDER BY p.created_at DESC, p.id DESC LIMIT 1)
+            topic_count       = (SELECT COUNT(*) FROM forum.topics t WHERE t.forum_id = f.id AND t.is_approved AND NOT t.is_deleted),
+            post_count        = (SELECT COUNT(*) FROM forum.posts  p WHERE p.forum_id = f.id AND p.is_approved AND NOT p.is_deleted),
+            last_post_id      = (SELECT p.id FROM forum.posts p WHERE p.forum_id = f.id AND p.is_approved AND NOT p.is_deleted ORDER BY p.created_at DESC, p.id DESC LIMIT 1),
+            last_post_at      = (SELECT p.created_at FROM forum.posts p WHERE p.forum_id = f.id AND p.is_approved AND NOT p.is_deleted ORDER BY p.created_at DESC, p.id DESC LIMIT 1),
+            last_post_user_id = (SELECT p.author_id FROM forum.posts p WHERE p.forum_id = f.id AND p.is_approved AND NOT p.is_deleted ORDER BY p.created_at DESC, p.id DESC LIMIT 1)
          WHERE f.id = $1",
     )
     .bind(forum_id)

@@ -3,6 +3,32 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::Validate;
 
+/// One row of the members directory (a participant, i.e. anyone with a forum
+/// profile — the module does not own the account list, the core does).
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct MemberRow {
+    pub user_id:      Uuid,
+    pub post_count:   i32,
+    pub rank_title:   Option<String>,
+    pub rank_badge:   Option<String>,
+    pub last_seen_at: Option<DateTime<Utc>>,
+    pub created_at:   DateTime<Utc>,
+}
+
+/// Compact per-author profile, resolved in bulk for a post listing so an author
+/// column can show a rank and post count without one request per author.
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct BriefProfile {
+    pub user_id:      Uuid,
+    pub post_count:   i32,
+    pub custom_title: Option<String>,
+    pub rank_title:   Option<String>,
+    pub rank_badge:   Option<String>,
+    /// Null when signatures are disabled instance-wide, so the client never
+    /// receives content it must not display.
+    pub signature_md: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Rank {
     pub id:         Uuid,

@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Postgres, QueryBuilder};
 use uuid::Uuid;
 
@@ -30,7 +31,8 @@ impl TopicService {
         // Pinned types first (global, announcement, sticky), then by latest activity.
         let rows = sqlx::query_as::<_, Topic>(
             "SELECT * FROM forum.topics
-              WHERE forum_id = $1 AND (is_approved = TRUE OR author_id = $2 OR $3::boolean)
+              WHERE forum_id = $1 AND is_deleted = FALSE
+                AND (is_approved = TRUE OR author_id = $2 OR $3::boolean)
              ORDER BY CASE topic_type
                         WHEN 'global'       THEN 0
                         WHEN 'announcement' THEN 1
@@ -57,7 +59,8 @@ impl TopicService {
     ) -> Result<i64> {
         let n: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM forum.topics
-              WHERE forum_id = $1 AND (is_approved = TRUE OR author_id = $2 OR $3::boolean)",
+              WHERE forum_id = $1 AND is_deleted = FALSE
+                AND (is_approved = TRUE OR author_id = $2 OR $3::boolean)",
         )
         .bind(forum_id)
         .bind(viewer_id)
@@ -73,6 +76,22 @@ impl TopicService {
             .fetch_optional(db)
             .await?
             .ok_or_else(|| ForumError::NotFound(format!("Topic {id}")))
+    }
+
+    /// This user's read marker for one topic — `None` when no row exists yet
+    /// (the topic has never been marked read by them). Queried directly
+    /// against `read_markers` rather than through `EngagementService`, which
+    /// this read-only lookup (the topic view's "jump to first unread post")
+    /// has no other reason to depend on.
+    pub async fn read_marker(topic_id: Uuid, user_id: Uuid, db: &PgPool) -> Result<Option<DateTime<Utc>>> {
+        let read_at: Option<DateTime<Utc>> = sqlx::query_scalar(
+            "SELECT read_at FROM forum.read_markers WHERE topic_id = $1 AND user_id = $2",
+        )
+        .bind(topic_id)
+        .bind(user_id)
+        .fetch_optional(db)
+        .await?;
+        Ok(read_at)
     }
 
     /// Cross-forum discovery feed. `kind` ∈ recent | unanswered | popular |
@@ -95,6 +114,8 @@ impl TopicService {
         }
         qb.push("WHERE NOT EXISTS (SELECT 1 FROM forum.permissions pm \
                  WHERE pm.forum_id = t.forum_id AND pm.role = 'user' AND pm.can_view = FALSE) ");
+        // A soft-deleted topic is gone from discovery for everyone (SEC-12).
+        qb.push("AND t.is_deleted = FALSE ");
         // Cross-forum discovery must not surface what moderation is still holding.
         qb.push("AND (t.is_approved = TRUE OR t.author_id = ").push_bind(user_id).push(") ");
 
@@ -122,6 +143,45 @@ impl TopicService {
 
         let rows = qb.build_query_as::<Topic>().fetch_all(db).await?;
         Ok(rows)
+    }
+
+    /// Total topics matching `feed`'s filters — same WHERE clause, no
+    /// ORDER/LIMIT, so pagination on the discovery feed never counts (or
+    /// implies) a topic the caller would not otherwise be shown.
+    pub async fn feed_count(
+        kind: &str,
+        user_id: Uuid,
+        solved: Option<bool>,
+        tag_id: Option<Uuid>,
+        db: &PgPool,
+    ) -> Result<i64> {
+        let mut qb: QueryBuilder<Postgres> = QueryBuilder::new("SELECT COUNT(*) FROM forum.topics t ");
+        if kind == "unread" {
+            qb.push("LEFT JOIN forum.read_markers rm ON rm.topic_id = t.id AND rm.user_id = ");
+            qb.push_bind(user_id);
+            qb.push(" ");
+        }
+        qb.push("WHERE NOT EXISTS (SELECT 1 FROM forum.permissions pm \
+                 WHERE pm.forum_id = t.forum_id AND pm.role = 'user' AND pm.can_view = FALSE) ");
+        qb.push("AND t.is_deleted = FALSE ");
+        qb.push("AND (t.is_approved = TRUE OR t.author_id = ").push_bind(user_id).push(") ");
+
+        match kind {
+            "unanswered" => { qb.push("AND t.reply_count = 0 "); }
+            "mine" => { qb.push("AND t.author_id = ").push_bind(user_id).push(" "); }
+            "unread" => { qb.push("AND (rm.user_id IS NULL OR t.last_post_at > rm.read_at) AND t.last_post_at IS NOT NULL "); }
+            _ => {}
+        }
+        if let Some(s) = solved {
+            qb.push("AND t.is_solved = ").push_bind(s).push(" ");
+        }
+        if let Some(tid) = tag_id {
+            qb.push("AND EXISTS (SELECT 1 FROM forum.topic_tags tt WHERE tt.topic_id = t.id AND tt.tag_id = ")
+                .push_bind(tid).push(") ");
+        }
+
+        let n: i64 = qb.build_query_scalar().fetch_one(db).await?;
+        Ok(n)
     }
 
     /// Topics authored by a given user (public profile listing).
@@ -288,12 +348,94 @@ impl TopicService {
             return Err(ForumError::Forbidden);
         }
         let mut tx = db.begin().await?;
-        // Cascade removes the posts; recompute the forum afterwards.
-        sqlx::query("DELETE FROM forum.topics WHERE id = $1")
+        // Soft-delete rather than erase (SEC-12): the topic drops out of every
+        // listing but its posts stay in place and it can be recovered. A wrong
+        // click, or a compromised account, no longer destroys a discussion for
+        // good. Recomputing the forum afterwards discounts the now-hidden topic.
+        let r = sqlx::query(
+            "UPDATE forum.topics SET is_deleted = TRUE, deleted_at = NOW(), deleted_by = $2
+              WHERE id = $1 AND is_deleted = FALSE",
+        )
+        .bind(id)
+        .bind(user.id)
+        .execute(&mut *tx)
+        .await?;
+        if r.rows_affected() == 0 {
+            tx.rollback().await?;
+            return Err(ForumError::NotFound(format!("Topic {id}")));
+        }
+        aggregates::recompute_forum(&mut tx, topic.forum_id).await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    // ── Trash (soft-deleted topics) ─────────────────────────────────────────────
+
+    /// Soft-deleted topics, newest deletion first. `forum_ids = None` is every
+    /// forum (platform administrators); otherwise only the forums the caller
+    /// moderates, mirroring the scoping already used for reports/queue/log.
+    pub async fn list_deleted(forum_ids: Option<&[Uuid]>, limit: i64, db: &PgPool) -> Result<Vec<Topic>> {
+        let rows = match forum_ids {
+            None => sqlx::query_as::<_, Topic>(
+                "SELECT * FROM forum.topics WHERE is_deleted = TRUE
+                 ORDER BY deleted_at DESC LIMIT $1",
+            )
+            .bind(limit.clamp(1, 200))
+            .fetch_all(db)
+            .await?,
+            Some(ids) => sqlx::query_as::<_, Topic>(
+                "SELECT * FROM forum.topics WHERE is_deleted = TRUE AND forum_id = ANY($1)
+                 ORDER BY deleted_at DESC LIMIT $2",
+            )
+            .bind(ids)
+            .bind(limit.clamp(1, 200))
+            .fetch_all(db)
+            .await?,
+        };
+        Ok(rows)
+    }
+
+    /// Brings a soft-deleted topic back into every listing. A no-op target (not
+    /// deleted, or gone) is reported as not-found rather than silently accepted.
+    pub async fn restore(id: Uuid, db: &PgPool) -> Result<Topic> {
+        let mut tx = db.begin().await?;
+        let r = sqlx::query(
+            "UPDATE forum.topics SET is_deleted = FALSE, deleted_at = NULL, deleted_by = NULL
+              WHERE id = $1 AND is_deleted = TRUE",
+        )
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
+        if r.rows_affected() == 0 {
+            tx.rollback().await?;
+            return Err(ForumError::NotFound(format!("Topic {id}")));
+        }
+        let topic = sqlx::query_as::<_, Topic>("SELECT * FROM forum.topics WHERE id = $1")
             .bind(id)
-            .execute(&mut *tx)
+            .fetch_one(&mut *tx)
             .await?;
         aggregates::recompute_forum(&mut tx, topic.forum_id).await?;
+        tx.commit().await?;
+        Ok(topic)
+    }
+
+    /// Permanently erases a soft-deleted topic and every post it holds. This is
+    /// the only hard delete in the topic lifecycle (SEC-12): reserved for admins,
+    /// and only ever applied to something already sitting in the trash, so a
+    /// moderator's soft-delete remains the sole path to losing a topic's content.
+    pub async fn purge(id: Uuid, db: &PgPool) -> Result<()> {
+        let mut tx = db.begin().await?;
+        let forum_id: Option<Uuid> = sqlx::query_scalar(
+            "DELETE FROM forum.topics WHERE id = $1 AND is_deleted = TRUE RETURNING forum_id",
+        )
+        .bind(id)
+        .fetch_optional(&mut *tx)
+        .await?;
+        let Some(forum_id) = forum_id else {
+            tx.rollback().await?;
+            return Err(ForumError::NotFound(format!("Topic {id}")));
+        };
+        aggregates::recompute_forum(&mut tx, forum_id).await?;
         tx.commit().await?;
         Ok(())
     }
@@ -466,5 +608,64 @@ impl TopicService {
         }
         tx.commit().await?;
         Self::get(id, db).await
+    }
+
+    // ── Maintenance ──────────────────────────────────────────────────────────
+
+    /// WHERE clause shared by `prune_forum`'s preview and its actual pass: stale,
+    /// non-deleted topics of one forum. Pinned types, a solved question, and any
+    /// topic carrying a poll are excluded — a prune is meant for dead ordinary
+    /// discussions, not content an admin (or a poll's voters) expects to keep
+    /// finding in place. `$1` = forum_id, `$2` = older_than_days.
+    const PRUNE_PREDICATE: &'static str = "
+        forum_id = $1 AND is_deleted = FALSE
+        AND COALESCE(last_post_at, created_at) < NOW() - make_interval(days => $2)
+        AND topic_type NOT IN ('sticky', 'announcement', 'global')
+        AND is_solved = FALSE
+        AND NOT EXISTS (SELECT 1 FROM forum.polls WHERE topic_id = forum.topics.id)";
+
+    /// Counts, or soft-deletes, the topics of `forum_id` that have sat inactive
+    /// for at least `older_than_days`. `dry_run = true` only counts — nothing is
+    /// written — so an admin can preview the impact before committing to it.
+    /// Otherwise the matching topics are soft-deleted in one transaction (same
+    /// mechanism as `delete`, fully reversible from the trash) and the forum's
+    /// aggregates are recomputed to drop them from its counters.
+    pub async fn prune_forum(
+        forum_id: Uuid,
+        older_than_days: i32,
+        dry_run: bool,
+        actor: Uuid,
+        db: &PgPool,
+    ) -> Result<i64> {
+        if older_than_days < 1 {
+            return Err(ForumError::Validation("older_than_days must be at least 1".into()));
+        }
+
+        if dry_run {
+            let count: i64 = sqlx::query_scalar(&format!(
+                "SELECT COUNT(*) FROM forum.topics WHERE {}",
+                Self::PRUNE_PREDICATE
+            ))
+            .bind(forum_id)
+            .bind(older_than_days)
+            .fetch_one(db)
+            .await?;
+            return Ok(count);
+        }
+
+        let mut tx = db.begin().await?;
+        let pruned: Vec<Uuid> = sqlx::query_scalar(&format!(
+            "UPDATE forum.topics SET is_deleted = TRUE, deleted_at = NOW(), deleted_by = $3
+              WHERE {} RETURNING id",
+            Self::PRUNE_PREDICATE
+        ))
+        .bind(forum_id)
+        .bind(older_than_days)
+        .bind(actor)
+        .fetch_all(&mut *tx)
+        .await?;
+        aggregates::recompute_forum(&mut tx, forum_id).await?;
+        tx.commit().await?;
+        Ok(pruned.len() as i64)
     }
 }

@@ -9,6 +9,15 @@ use crate::{
 pub struct PollService;
 
 impl PollService {
+    /// Loads a poll by id (used to resolve its topic before a permission check).
+    pub async fn find(poll_id: Uuid, db: &PgPool) -> Result<Poll> {
+        sqlx::query_as::<_, Poll>("SELECT * FROM forum.polls WHERE id = $1")
+            .bind(poll_id)
+            .fetch_optional(db)
+            .await?
+            .ok_or_else(|| ForumError::NotFound(format!("Poll {poll_id}")))
+    }
+
     /// Returns a topic's poll with per-option counts for the requesting user.
     pub async fn results(topic_id: Uuid, user_id: Uuid, db: &PgPool) -> Result<Option<PollResults>> {
         let poll = sqlx::query_as::<_, Poll>("SELECT * FROM forum.polls WHERE topic_id = $1")

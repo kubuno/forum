@@ -1,30 +1,32 @@
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, QueryBuilder};
 use uuid::Uuid;
 
 use crate::{
     errors::{ForumError, Result},
+    middleware::ForumUser,
     models::forum::{CreateForumDto, Forum, UpdateForumDto},
+    services::permission_service::PermissionService,
 };
 
 pub struct ForumService;
 
 impl ForumService {
-    pub async fn list(db: &PgPool) -> Result<Vec<Forum>> {
-        let rows = sqlx::query_as::<_, Forum>(
-            "SELECT * FROM forum.forums ORDER BY position, name",
-        )
-        .fetch_all(db)
-        .await?;
+    /// Lists forums the caller may see (SEC-14): a forum whose `role = 'user'`
+    /// permission denies `can_view` is hidden from non-moderators.
+    pub async fn list(user: &ForumUser, db: &PgPool) -> Result<Vec<Forum>> {
+        let mut qb: QueryBuilder<Postgres> = QueryBuilder::new("SELECT f.* FROM forum.forums f WHERE ");
+        PermissionService::push_visible_forum(&mut qb, "f.id", user);
+        qb.push(" ORDER BY f.position, f.name");
+        let rows = qb.build_query_as::<Forum>().fetch_all(db).await?;
         Ok(rows)
     }
 
-    pub async fn list_by_category(category_id: Uuid, db: &PgPool) -> Result<Vec<Forum>> {
-        let rows = sqlx::query_as::<_, Forum>(
-            "SELECT * FROM forum.forums WHERE category_id = $1 ORDER BY position, name",
-        )
-        .bind(category_id)
-        .fetch_all(db)
-        .await?;
+    pub async fn list_by_category(user: &ForumUser, category_id: Uuid, db: &PgPool) -> Result<Vec<Forum>> {
+        let mut qb: QueryBuilder<Postgres> = QueryBuilder::new("SELECT f.* FROM forum.forums f WHERE f.category_id = ");
+        qb.push_bind(category_id).push(" AND ");
+        PermissionService::push_visible_forum(&mut qb, "f.id", user);
+        qb.push(" ORDER BY f.position, f.name");
+        let rows = qb.build_query_as::<Forum>().fetch_all(db).await?;
         Ok(rows)
     }
 
@@ -89,6 +91,28 @@ impl ForumService {
         if res.rows_affected() == 0 {
             return Err(ForumError::NotFound(format!("Forum {id}")));
         }
+        Ok(())
+    }
+
+    /// Reorders forums: sets `position` to each id's index in `ids`, all in one
+    /// transaction. Ids not present in the list are left untouched, so the
+    /// caller can reorder a single category's subset without disturbing the
+    /// position of every other forum in the tree.
+    pub async fn reorder(ids: &[Uuid], db: &PgPool) -> Result<()> {
+        let mut tx = db.begin().await?;
+        for (index, id) in ids.iter().enumerate() {
+            let res = sqlx::query("UPDATE forum.forums SET position = $2 WHERE id = $1")
+                .bind(id)
+                .bind(index as i32)
+                .execute(&mut *tx)
+                .await
+                .inspect_err(|e| tracing::error!(error = %e, %id, "Reordering forum"))?;
+            if res.rows_affected() == 0 {
+                tx.rollback().await?;
+                return Err(ForumError::NotFound(format!("Forum {id}")));
+            }
+        }
+        tx.commit().await?;
         Ok(())
     }
 }

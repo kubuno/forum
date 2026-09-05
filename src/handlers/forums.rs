@@ -14,7 +14,7 @@ use crate::{
     models::forum::{CreateForumDto, UpdateForumDto},
     services::{
         engagement_service::EngagementService, forum_service::ForumService,
-        permission_service::PermissionService,
+        moderation_service::ModerationService, permission_service::PermissionService,
     },
     state::AppState,
 };
@@ -24,13 +24,20 @@ pub struct ListForumsQuery {
     pub category_id: Option<Uuid>,
 }
 
+#[derive(Debug, Deserialize, Validate)]
+pub struct ReorderForumsDto {
+    #[validate(length(min = 1))]
+    pub ids: Vec<Uuid>,
+}
+
 pub async fn list(
     State(state): State<AppState>,
+    Extension(user): Extension<ForumUser>,
     Query(q): Query<ListForumsQuery>,
 ) -> Result<Json<Value>> {
     let forums = match q.category_id {
-        Some(cid) => ForumService::list_by_category(cid, &state.db).await?,
-        None => ForumService::list(&state.db).await?,
+        Some(cid) => ForumService::list_by_category(&user, cid, &state.db).await?,
+        None => ForumService::list(&user, &state.db).await?,
     };
     Ok(Json(json!({ "forums": forums })))
 }
@@ -62,6 +69,7 @@ pub async fn create(
     PermissionService::assert_admin(&user)?;
     dto.validate().map_err(|e| ForumError::Validation(e.to_string()))?;
     let forum = ForumService::create(dto, &state.db).await?;
+    ModerationService::log(user.id, "forum_create", Some(forum.id), None, None, None, Some(&forum.name), &state.db).await;
     Ok((StatusCode::CREATED, Json(json!({ "forum": forum }))))
 }
 
@@ -84,6 +92,33 @@ pub async fn delete(
 ) -> Result<StatusCode> {
     PermissionService::assert_admin(&user)?;
     ForumService::delete(id, &state.db).await?;
+    ModerationService::log(user.id, "forum_delete", Some(id), None, None, None, None, &state.db).await;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// PATCH /forums/reorder — admin only. Sets `position = index` for each forum
+/// id in the given order, in one transaction (SEC: multi-row writes stay
+/// atomic). Meant to be called with the ids of a single category's forums, so
+/// only that category's ordering changes.
+pub async fn reorder(
+    State(state): State<AppState>,
+    Extension(user): Extension<ForumUser>,
+    Json(dto): Json<ReorderForumsDto>,
+) -> Result<StatusCode> {
+    PermissionService::assert_admin(&user)?;
+    dto.validate().map_err(|e| ForumError::Validation(e.to_string()))?;
+    ForumService::reorder(&dto.ids, &state.db).await?;
+    ModerationService::log(
+        user.id,
+        "forum_reorder",
+        None,
+        None,
+        None,
+        None,
+        Some(&format!("{} forums", dto.ids.len())),
+        &state.db,
+    )
+    .await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -96,11 +131,24 @@ pub async fn read_state(
     Ok(Json(json!({ "read_state": markers })))
 }
 
+/// POST /forums/:id/read-all — marks every visible, non-deleted topic of this
+/// forum as read for the caller, up to its latest message.
+pub async fn read_all(
+    State(state): State<AppState>,
+    Extension(user): Extension<ForumUser>,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode> {
+    PermissionService::assert_can_view(id, &user, &state.db).await?;
+    EngagementService::mark_forum_read(user.id, id, &state.db).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 pub async fn subscribe(
     State(state): State<AppState>,
     Extension(user): Extension<ForumUser>,
     Path(id): Path<Uuid>,
 ) -> Result<(StatusCode, Json<Value>)> {
+    PermissionService::assert_can_view(id, &user, &state.db).await?;
     let sub = EngagementService::subscribe_forum(user.id, id, &state.db).await?;
     Ok((StatusCode::CREATED, Json(json!({ "subscription": sub }))))
 }

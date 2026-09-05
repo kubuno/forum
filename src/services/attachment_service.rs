@@ -33,6 +33,27 @@ impl AttachmentService {
         if author_id != user.id && !perms.is_admin && !perms.is_moderator {
             return Err(ForumError::Forbidden);
         }
+        // The forum's per-role permission may forbid attachments; it was resolved
+        // but never enforced before (SEC-04). Moderators/admins keep can_attach.
+        if !perms.can_attach {
+            return Err(ForumError::Forbidden);
+        }
+        // Cap the number of attachments on a single post so one message cannot
+        // accumulate an unbounded list of file references.
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM forum.attachments WHERE post_id = $1")
+            .bind(post_id)
+            .fetch_one(db)
+            .await?;
+        if count >= 10 {
+            return Err(ForumError::Conflict(
+                "this message already has the maximum number of attachments".into(),
+            ));
+        }
+        // NOTE (SEC-04, remaining M-effort work): filename / mime_type / size are
+        // still trusted from the client, and file_id is not yet re-checked against
+        // the Drive module for ownership. That resolution via an authenticated
+        // internal Drive call is a dedicated follow-up before attachments ship
+        // to untrusted users.
         let row = sqlx::query_as::<_, Attachment>(
             "INSERT INTO forum.attachments (post_id, file_id, filename, mime_type, size_bytes)
              VALUES ($1, $2, $3, $4, $5) RETURNING *",

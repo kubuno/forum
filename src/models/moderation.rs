@@ -9,6 +9,9 @@ pub struct Report {
     pub post_id:     Uuid,
     pub reporter_id: Uuid,
     pub reason:      String,
+    /// Predefined reason the reporter picked, if any (SEC-15 dedup and the
+    /// legacy free-text `reason` both stay independent of this).
+    pub reason_id:   Option<Uuid>,
     pub status:      String,
     pub handled_by:  Option<Uuid>,
     pub handled_at:  Option<DateTime<Utc>>,
@@ -19,6 +22,30 @@ pub struct Report {
 pub struct CreateReportDto {
     #[validate(length(min = 1, max = 2000))]
     pub reason: String,
+    /// Optional predefined reason (`forum.report_reasons.id`) picked alongside
+    /// the free-text comment above.
+    #[serde(default)]
+    pub reason_id: Option<Uuid>,
+}
+
+/// A predefined reason an admin curates for the report chip picker (phpBB-style).
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct ReportReason {
+    pub id:          Uuid,
+    pub title:       String,
+    pub description: Option<String>,
+    pub position:    i32,
+    pub created_at:  DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize, Validate)]
+pub struct CreateReportReasonDto {
+    #[validate(length(min = 1, max = 200))]
+    pub title: String,
+    #[validate(length(max = 2000))]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub position: i32,
 }
 
 #[derive(Debug, Deserialize, Validate)]
@@ -120,4 +147,74 @@ pub struct ModNoteDto {
     pub post_id:        Option<Uuid>,
     #[validate(length(min = 1, max = 4000))]
     pub body:           String,
+}
+
+// ── IP / email bans (phpBB-style, enforced server-side, exact match) ────────
+
+/// A banned IP address (`services::ban_registry`, `middleware::enforce_ban`).
+/// `value` is always the exact, canonical `IpAddr::to_string()` form — no
+/// CIDR, no wildcard.
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+pub struct IpBan {
+    pub id:         Uuid,
+    pub value:      String,
+    pub reason:     Option<String>,
+    pub banned_by:  Uuid,
+    pub until:      Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize, Validate)]
+pub struct IpBanDto {
+    #[validate(length(min = 1, max = 64))]
+    pub value:  String,
+    #[validate(length(max = 2000))]
+    pub reason: Option<String>,
+    pub days:   Option<i64>, // None = permanent
+}
+
+/// A banned email address (always stored lowercase — see
+/// `services::moderation_service::ModerationService::ban_email`).
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+pub struct EmailBan {
+    pub id:         Uuid,
+    pub email:      String,
+    pub reason:     Option<String>,
+    pub banned_by:  Uuid,
+    pub until:      Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize, Validate)]
+pub struct EmailBanDto {
+    #[validate(length(min = 1, max = 320))]
+    pub email:  String,
+    #[validate(length(max = 2000))]
+    pub reason: Option<String>,
+    pub days:   Option<i64>, // None = permanent
+}
+
+// ── Word censor (phpBB-style, applied server-side at render time) ───────────
+
+/// An admin-curated word/phrase substituted in every post body when it is
+/// rendered — see `services::censor_service`. `pattern` is always a literal
+/// word or phrase, never a regex fragment: the service escapes it
+/// (`regex::escape`) before compiling a case-insensitive, word-boundary
+/// regex, so an admin can never inject an expensive or malicious pattern.
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct CensoredWord {
+    pub id:          Uuid,
+    pub pattern:     String,
+    pub replacement: String,
+    pub created_at:  DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize, Validate)]
+pub struct CreateCensoredWordDto {
+    #[validate(length(min = 1, max = 200))]
+    pub pattern: String,
+    /// Defaults to `***` server-side when left empty.
+    #[serde(default)]
+    #[validate(length(max = 200))]
+    pub replacement: Option<String>,
 }

@@ -4,12 +4,12 @@ import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Home, MessagesSquare, ShieldAlert, Settings, Clock, HelpCircle, Flame, Mail,
-  User as UserIcon, Bookmark, Users,
+  User as UserIcon, Bookmark, Users, FileText, Circle, Trophy, MessageCircle, UserX, Rss, Shield,
 } from 'lucide-react'
 import { SidebarNavItem, useAuthStore } from '@kubuno/sdk'
 import { forumApi } from './api'
 import { setQueryClient } from './nav'
-import NotificationsBell from './NotificationsBell'
+import { useForumNotificationSync } from './useForumNotificationSync'
 
 export default function ForumSidebarBody({ collapsed = false }: { collapsed?: boolean }) {
   const { t } = useTranslation('forum')
@@ -26,6 +26,7 @@ export default function ForumSidebarBody({ collapsed = false }: { collapsed?: bo
   const { data: categories = [] } = useQuery({ queryKey: ['forum-categories'], queryFn: forumApi.listCategories })
   const { data: forums = [] } = useQuery({ queryKey: ['forum-forums'], queryFn: () => forumApi.listForums() })
   const { data: stats } = useQuery({ queryKey: ['forum-stats'], queryFn: forumApi.stats, refetchInterval: 60_000 })
+  const { data: pmUnread = 0 } = useQuery({ queryKey: ['forum-pm-unread'], queryFn: forumApi.pmUnreadCount, refetchInterval: 60_000 })
 
   // Heartbeat keeps the user listed in "who's online".
   useEffect(() => {
@@ -34,6 +35,10 @@ export default function ForumSidebarBody({ collapsed = false }: { collapsed?: bo
     return () => clearInterval(iv)
   }, [])
 
+  // Catch-up: announces into the shared header bell whatever forum
+  // notifications the user missed while offline (see the hook's own doc).
+  useForumNotificationSync()
+
   const feedActive = (k: string) => pathname === `/forum/feed/${k}`
   const feed = (k: string, label: string, icon: React.ReactNode) => (
     <SidebarNavItem label={label} icon={icon} collapsed={collapsed} active={feedActive(k)} to={`/forum/feed/${k}`} />
@@ -41,7 +46,10 @@ export default function ForumSidebarBody({ collapsed = false }: { collapsed?: bo
 
   return (
     <div className="flex flex-col gap-0.5 px-3 py-2">
-      <NotificationsBell collapsed={collapsed} />
+      {/* Notifications are surfaced by the shared header bell (the core's
+          notification store), fed in real time by the forum's WS events, and
+          caught up on mount by useForumNotificationSync() below — the module
+          no longer keeps its own bell. */}
       <SidebarNavItem
         label={t('forums')}
         icon={<Home size={18} />}
@@ -58,6 +66,70 @@ export default function ForumSidebarBody({ collapsed = false }: { collapsed?: bo
       {feed('unread', t('feed_unread'), <Mail size={18} />)}
       {feed('mine', t('feed_mine'), <UserIcon size={18} />)}
       {feed('bookmarks', t('feed_bookmarks'), <Bookmark size={18} />)}
+      <SidebarNavItem
+        label={t('members', { defaultValue: 'Members' })}
+        icon={<Users size={18} />}
+        collapsed={collapsed}
+        active={pathname === '/forum/members'}
+        to="/forum/members"
+      />
+      <SidebarNavItem
+        label={t('team', { defaultValue: 'Équipe de modération' })}
+        icon={<Shield size={18} />}
+        collapsed={collapsed}
+        active={pathname === '/forum/team'}
+        to="/forum/team"
+      />
+      <SidebarNavItem
+        label={t('ignored_users', { defaultValue: 'Membres ignorés' })}
+        icon={<UserX size={18} />}
+        collapsed={collapsed}
+        active={pathname === '/forum/ignored'}
+        to="/forum/ignored"
+      />
+      <SidebarNavItem
+        label={t('rss_feeds', { defaultValue: 'Flux RSS' })}
+        icon={<Rss size={18} />}
+        collapsed={collapsed}
+        active={pathname === '/forum/feeds'}
+        to="/forum/feeds"
+      />
+      <SidebarNavItem
+        label={t('private_messages', { defaultValue: 'Messages privés' })}
+        icon={<MessageCircle size={18} />}
+        collapsed={collapsed}
+        active={pathname === '/forum/pm' || pathname.startsWith('/forum/pm/')}
+        to="/forum/pm"
+        badge={pmUnread}
+      />
+      <SidebarNavItem
+        label={t('whos_online', { defaultValue: "Who's online" })}
+        icon={<Circle size={18} />}
+        collapsed={collapsed}
+        active={pathname === '/forum/online'}
+        to="/forum/online"
+      />
+      <SidebarNavItem
+        label={t('leaderboard', { defaultValue: 'Leaderboard' })}
+        icon={<Trophy size={18} />}
+        collapsed={collapsed}
+        active={pathname === '/forum/leaderboard'}
+        to="/forum/leaderboard"
+      />
+      <SidebarNavItem
+        label={t('drafts', { defaultValue: 'Drafts' })}
+        icon={<FileText size={18} />}
+        collapsed={collapsed}
+        active={pathname === '/forum/drafts'}
+        to="/forum/drafts"
+      />
+      <SidebarNavItem
+        label={t('faq', { defaultValue: 'FAQ' })}
+        icon={<HelpCircle size={18} />}
+        collapsed={collapsed}
+        active={pathname === '/forum/faq'}
+        to="/forum/faq"
+      />
 
       {categories.map(cat => {
         const top = forums.filter(f => f.category_id === cat.id && !f.parent_forum_id)

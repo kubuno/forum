@@ -1,12 +1,17 @@
 pub mod attachment;
 pub mod category;
 pub mod draft;
+pub mod faq;
+pub mod feed;
 pub mod forum;
+pub mod ignore;
 pub mod moderation;
 pub mod notification;
 pub mod permission;
+pub mod pm;
 pub mod poll;
 pub mod post;
+pub mod profile_field;
 pub mod rank;
 pub mod reaction;
 pub mod tag;
