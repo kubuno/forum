@@ -1,7 +1,7 @@
 [module]
 id           = "forum"
 display_name = "Forum"
-version      = "0.1.6"
+version      = "0.1.7"
 description  = "Discussion boards: categories, forums, topics and posts with moderation, ranks and per-forum permissions"
 author       = "Kubuno Contributors"
 license      = "AGPL-3.0"
