@@ -185,6 +185,11 @@ number at release time, and CI publishes that section as the GitHub Release note
 ### Changed
 
 
+- **This module now installs as a Kubuno package (`.kbpkg`) only.** Its system
+  packages (Debian/RPM and the Windows and macOS installers) are no longer
+  built: the module is distributed as one `.kbpkg` per platform (Linux, Windows,
+  macOS) that the Kubuno server installs itself — from the admin console, or
+  offline with `kubuno modules:install <file>.kbpkg`.
 - **The README now opens with the module's logo.** The public README on
   GitHub now shows the module's designer logo (the same PNG shown as the
   browser tab icon and in the applications menu) at the top of the page — the
