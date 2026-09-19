@@ -92,9 +92,14 @@ impl PermissionService {
     /// moderator sees the forums they moderate; everyone else is denied any forum
     /// whose `role = 'user'` permission row sets `can_view = FALSE`.
     ///
-    /// `forum_col` is a caller-controlled SQL column expression (e.g. `f.id`,
-    /// `p.forum_id`) — never user input — so it is safe to inline as raw SQL.
-    pub fn push_visible_forum(qb: &mut QueryBuilder<'_, Postgres>, forum_col: &str, user: &ForumUser) {
+    /// `forum_col` is a SQL column expression (e.g. `f.id`, `p.forum_id`). It is
+    /// typed `&'static str` so the compiler guarantees it can only ever be a
+    /// string literal written in this crate, never data from a request.
+    pub fn push_visible_forum(
+        qb: &mut QueryBuilder<Postgres>,
+        forum_col: &'static str,
+        user: &ForumUser,
+    ) {
         if user.is_admin() {
             qb.push("TRUE");
             return;

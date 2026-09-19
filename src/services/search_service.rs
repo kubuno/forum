@@ -92,7 +92,7 @@ impl SearchService {
     /// of the caller's own `SELECT ... FROM ...`. `websearch_to_tsquery`
     /// natively understands quoted phrases, `OR`, and `-exclusion`, which is
     /// exactly the query syntax a search bar wants to expose to users.
-    fn push_cte(qb: &mut QueryBuilder<'_, Postgres>, query: &str) {
+    fn push_cte(qb: &mut QueryBuilder<Postgres>, query: &str) {
         qb.push("WITH q AS (SELECT websearch_to_tsquery('french', ")
             .push_bind(query.to_string())
             .push(") AS tsq) ");
@@ -104,7 +104,7 @@ impl SearchService {
     /// exclusion, the same `PermissionService::push_visible_forum` visibility
     /// filter, and the same advanced filters apply to both, however the
     /// feature grows later.
-    fn push_where(qb: &mut QueryBuilder<'_, Postgres>, user: &ForumUser, filters: &SearchFilters) {
+    fn push_where(qb: &mut QueryBuilder<Postgres>, user: &ForumUser, filters: &SearchFilters) {
         qb.push("p.is_deleted = FALSE AND t.is_deleted = FALSE AND (p.is_approved = TRUE OR p.author_id = ");
         qb.push_bind(user.id);
         qb.push(") AND ");

@@ -14,6 +14,29 @@ use crate::{
 
 const VALID_TYPES: [&str; 4] = ["normal", "sticky", "announcement", "global"];
 
+/// Wraps the WHERE clause shared by `prune_forum`'s preview and its actual pass:
+/// stale, non-deleted topics of one forum. Pinned types, a solved question, and
+/// any topic carrying a poll are excluded — a prune is meant for dead ordinary
+/// discussions, not content an admin (or a poll's voters) expects to keep
+/// finding in place. `$1` = forum_id, `$2` = older_than_days.
+///
+/// Both callers pass string literals, so each query is a single literal built at
+/// compile time: the predicate stays written in one place without any of the SQL
+/// text being assembled at run time.
+macro_rules! prune_sql {
+    ($head:literal, $tail:literal) => {
+        concat!(
+            $head,
+            " forum_id = $1 AND is_deleted = FALSE
+              AND COALESCE(last_post_at, created_at) < NOW() - make_interval(days => $2)
+              AND topic_type NOT IN ('sticky', 'announcement', 'global')
+              AND is_solved = FALSE
+              AND NOT EXISTS (SELECT 1 FROM forum.polls WHERE topic_id = forum.topics.id) ",
+            $tail
+        )
+    };
+}
+
 pub struct TopicService;
 
 impl TopicService {
@@ -133,7 +156,7 @@ impl TopicService {
                 .push_bind(tid).push(") ");
         }
 
-        let order = match kind {
+        let order: &'static str = match kind {
             "popular" => "ORDER BY (t.view_count + t.reply_count * 3) DESC, t.last_post_at DESC NULLS LAST ",
             "unanswered" | "mine" => "ORDER BY t.created_at DESC ",
             _ => "ORDER BY t.last_post_at DESC NULLS LAST, t.created_at DESC ",
@@ -612,18 +635,6 @@ impl TopicService {
 
     // ── Maintenance ──────────────────────────────────────────────────────────
 
-    /// WHERE clause shared by `prune_forum`'s preview and its actual pass: stale,
-    /// non-deleted topics of one forum. Pinned types, a solved question, and any
-    /// topic carrying a poll are excluded — a prune is meant for dead ordinary
-    /// discussions, not content an admin (or a poll's voters) expects to keep
-    /// finding in place. `$1` = forum_id, `$2` = older_than_days.
-    const PRUNE_PREDICATE: &'static str = "
-        forum_id = $1 AND is_deleted = FALSE
-        AND COALESCE(last_post_at, created_at) < NOW() - make_interval(days => $2)
-        AND topic_type NOT IN ('sticky', 'announcement', 'global')
-        AND is_solved = FALSE
-        AND NOT EXISTS (SELECT 1 FROM forum.polls WHERE topic_id = forum.topics.id)";
-
     /// Counts, or soft-deletes, the topics of `forum_id` that have sat inactive
     /// for at least `older_than_days`. `dry_run = true` only counts — nothing is
     /// written — so an admin can preview the impact before committing to it.
@@ -642,22 +653,19 @@ impl TopicService {
         }
 
         if dry_run {
-            let count: i64 = sqlx::query_scalar(&format!(
-                "SELECT COUNT(*) FROM forum.topics WHERE {}",
-                Self::PRUNE_PREDICATE
-            ))
-            .bind(forum_id)
-            .bind(older_than_days)
-            .fetch_one(db)
-            .await?;
+            let count: i64 =
+                sqlx::query_scalar(prune_sql!("SELECT COUNT(*) FROM forum.topics WHERE", ""))
+                    .bind(forum_id)
+                    .bind(older_than_days)
+                    .fetch_one(db)
+                    .await?;
             return Ok(count);
         }
 
         let mut tx = db.begin().await?;
-        let pruned: Vec<Uuid> = sqlx::query_scalar(&format!(
-            "UPDATE forum.topics SET is_deleted = TRUE, deleted_at = NOW(), deleted_by = $3
-              WHERE {} RETURNING id",
-            Self::PRUNE_PREDICATE
+        let pruned: Vec<Uuid> = sqlx::query_scalar(prune_sql!(
+            "UPDATE forum.topics SET is_deleted = TRUE, deleted_at = NOW(), deleted_by = $3 WHERE",
+            "RETURNING id"
         ))
         .bind(forum_id)
         .bind(older_than_days)

@@ -10,30 +10,38 @@ pub struct RankService;
 
 impl RankService {
     /// A page of the members directory, ordered by post count (default), join
-    /// date or last activity. `sort` comes from a fixed set, never raw input, so
-    /// it is safe to inline into the ORDER BY.
+    /// date or last activity. `sort` only selects between whole queries that are
+    /// assembled from literals at compile time, so no request data ever reaches
+    /// the SQL text.
     pub async fn members_page(
         sort: &str,
         limit: i64,
         offset: i64,
         db: &PgPool,
     ) -> Result<(Vec<MemberRow>, i64)> {
-        let order = match sort {
-            "recent" => "p.created_at DESC",
-            "active" => "p.last_seen_at DESC NULLS LAST, p.post_count DESC",
-            _ => "p.post_count DESC, p.created_at DESC",
+        macro_rules! members_sql {
+            ($order:literal) => {
+                concat!(
+                    "SELECT p.user_id, p.post_count, r.title AS rank_title, r.badge AS rank_badge, \
+                            p.last_seen_at, p.created_at \
+                       FROM forum.user_profiles p \
+                       LEFT JOIN forum.ranks r ON r.id = p.rank_id \
+                      ORDER BY ",
+                    $order,
+                    " LIMIT $1 OFFSET $2"
+                )
+            };
+        }
+        let sql: &'static str = match sort {
+            "recent" => members_sql!("p.created_at DESC"),
+            "active" => members_sql!("p.last_seen_at DESC NULLS LAST, p.post_count DESC"),
+            _ => members_sql!("p.post_count DESC, p.created_at DESC"),
         };
-        let rows = sqlx::query_as::<_, MemberRow>(&format!(
-            "SELECT p.user_id, p.post_count, r.title AS rank_title, r.badge AS rank_badge, \
-                    p.last_seen_at, p.created_at \
-               FROM forum.user_profiles p \
-               LEFT JOIN forum.ranks r ON r.id = p.rank_id \
-              ORDER BY {order} LIMIT $1 OFFSET $2"
-        ))
-        .bind(limit)
-        .bind(offset)
-        .fetch_all(db)
-        .await?;
+        let rows = sqlx::query_as::<_, MemberRow>(sql)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(db)
+            .await?;
         let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM forum.user_profiles")
             .fetch_one(db)
             .await?;
