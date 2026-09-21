@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
+use kubuno_db::dialect::Assign;
+use kubuno_db::{new_id, params, DbPool, DbQueryBuilder};
 use serde::Serialize;
-use sqlx::{PgPool, Postgres, QueryBuilder};
 use uuid::Uuid;
 
 use crate::{errors::Result, middleware::ForumUser, services::permission_service::PermissionService};
@@ -25,166 +26,178 @@ pub struct EngagementService;
 impl EngagementService {
     // ── Subscriptions (watch) ─────────────────────────────────────────────────
 
-    pub async fn subscribe_topic(user_id: Uuid, topic_id: Uuid, db: &PgPool) -> Result<Subscription> {
-        let row = sqlx::query_as::<_, Subscription>(
-            "INSERT INTO forum.subscriptions (user_id, topic_id) VALUES ($1, $2)
-             ON CONFLICT (user_id, topic_id) WHERE topic_id IS NOT NULL
-             DO UPDATE SET user_id = EXCLUDED.user_id
-             RETURNING *",
+    pub async fn subscribe_topic(user_id: Uuid, topic_id: Uuid, db: &DbPool) -> Result<Subscription> {
+        let b = db.backend();
+        // The former partial-index conflict target is now a plain UNIQUE
+        // (user_id, topic_id); an existing subscription is a no-op.
+        let sql = format!(
+            "INSERT {}INTO forum.subscriptions (id, user_id, topic_id) VALUES ($1, $2, $3){}",
+            b.insert_ignore_prefix(),
+            b.on_conflict_do_nothing(&["user_id", "topic_id"])
+        );
+        db.execute(&sql, params![new_id(), user_id, topic_id]).await?;
+        db.fetch_one_as::<Subscription>(
+            "SELECT * FROM forum.subscriptions WHERE user_id = $1 AND topic_id = $2",
+            params![user_id, topic_id],
         )
-        .bind(user_id)
-        .bind(topic_id)
-        .fetch_one(db)
-        .await?;
-        Ok(row)
+        .await
+        .map_err(Into::into)
     }
 
-    pub async fn subscribe_forum(user_id: Uuid, forum_id: Uuid, db: &PgPool) -> Result<Subscription> {
-        let row = sqlx::query_as::<_, Subscription>(
-            "INSERT INTO forum.subscriptions (user_id, forum_id) VALUES ($1, $2)
-             ON CONFLICT (user_id, forum_id) WHERE forum_id IS NOT NULL
-             DO UPDATE SET user_id = EXCLUDED.user_id
-             RETURNING *",
+    pub async fn subscribe_forum(user_id: Uuid, forum_id: Uuid, db: &DbPool) -> Result<Subscription> {
+        let b = db.backend();
+        let sql = format!(
+            "INSERT {}INTO forum.subscriptions (id, user_id, forum_id) VALUES ($1, $2, $3){}",
+            b.insert_ignore_prefix(),
+            b.on_conflict_do_nothing(&["user_id", "forum_id"])
+        );
+        db.execute(&sql, params![new_id(), user_id, forum_id]).await?;
+        db.fetch_one_as::<Subscription>(
+            "SELECT * FROM forum.subscriptions WHERE user_id = $1 AND forum_id = $2",
+            params![user_id, forum_id],
         )
-        .bind(user_id)
-        .bind(forum_id)
-        .fetch_one(db)
-        .await?;
-        Ok(row)
+        .await
+        .map_err(Into::into)
     }
 
-    pub async fn unsubscribe_topic(user_id: Uuid, topic_id: Uuid, db: &PgPool) -> Result<()> {
-        sqlx::query("DELETE FROM forum.subscriptions WHERE user_id = $1 AND topic_id = $2")
-            .bind(user_id)
-            .bind(topic_id)
-            .execute(db)
-            .await?;
+    pub async fn unsubscribe_topic(user_id: Uuid, topic_id: Uuid, db: &DbPool) -> Result<()> {
+        db.execute(
+            "DELETE FROM forum.subscriptions WHERE user_id = $1 AND topic_id = $2",
+            params![user_id, topic_id],
+        )
+        .await?;
         Ok(())
     }
 
-    pub async fn unsubscribe_forum(user_id: Uuid, forum_id: Uuid, db: &PgPool) -> Result<()> {
-        sqlx::query("DELETE FROM forum.subscriptions WHERE user_id = $1 AND forum_id = $2")
-            .bind(user_id)
-            .bind(forum_id)
-            .execute(db)
-            .await?;
+    pub async fn unsubscribe_forum(user_id: Uuid, forum_id: Uuid, db: &DbPool) -> Result<()> {
+        db.execute(
+            "DELETE FROM forum.subscriptions WHERE user_id = $1 AND forum_id = $2",
+            params![user_id, forum_id],
+        )
+        .await?;
         Ok(())
     }
 
-    pub async fn list_subscriptions(user_id: Uuid, db: &PgPool) -> Result<Vec<Subscription>> {
-        let rows = sqlx::query_as::<_, Subscription>(
-            "SELECT * FROM forum.subscriptions WHERE user_id = $1 ORDER BY created_at DESC",
-        )
-        .bind(user_id)
-        .fetch_all(db)
-        .await?;
+    pub async fn list_subscriptions(user_id: Uuid, db: &DbPool) -> Result<Vec<Subscription>> {
+        let rows = db
+            .fetch_all_as::<Subscription>(
+                "SELECT * FROM forum.subscriptions WHERE user_id = $1 ORDER BY created_at DESC",
+                params![user_id],
+            )
+            .await?;
         Ok(rows)
     }
 
     /// Everyone watching a topic — directly, or through a subscription to its
-    /// forum — minus `exclude` (the author of the new message). Callers still
-    /// apply a visibility gate before notifying, so this only gathers candidates.
-    pub async fn topic_watchers(topic_id: Uuid, forum_id: Uuid, exclude: Uuid, db: &PgPool) -> Result<Vec<Uuid>> {
-        let ids = sqlx::query_scalar::<_, Uuid>(
-            "SELECT DISTINCT user_id FROM forum.subscriptions
-              WHERE (topic_id = $1 OR forum_id = $2) AND user_id <> $3",
-        )
-        .bind(topic_id)
-        .bind(forum_id)
-        .bind(exclude)
-        .fetch_all(db)
-        .await?;
+    /// forum — minus `exclude` (the author of the new message).
+    pub async fn topic_watchers(topic_id: Uuid, forum_id: Uuid, exclude: Uuid, db: &DbPool) -> Result<Vec<Uuid>> {
+        let ids: Vec<Uuid> = db
+            .fetch_all_as::<(Uuid,)>(
+                "SELECT DISTINCT user_id FROM forum.subscriptions \
+                  WHERE (topic_id = $1 OR forum_id = $2) AND user_id <> $3",
+                params![topic_id, forum_id, exclude],
+            )
+            .await?
+            .into_iter()
+            .map(|(u,)| u)
+            .collect();
         Ok(ids)
     }
 
-    /// Everyone watching a forum, minus `exclude` — the candidates to notify of a
-    /// new topic there.
-    pub async fn forum_watchers(forum_id: Uuid, exclude: Uuid, db: &PgPool) -> Result<Vec<Uuid>> {
-        let ids = sqlx::query_scalar::<_, Uuid>(
-            "SELECT DISTINCT user_id FROM forum.subscriptions WHERE forum_id = $1 AND user_id <> $2",
-        )
-        .bind(forum_id)
-        .bind(exclude)
-        .fetch_all(db)
-        .await?;
+    /// Everyone watching a forum, minus `exclude`.
+    pub async fn forum_watchers(forum_id: Uuid, exclude: Uuid, db: &DbPool) -> Result<Vec<Uuid>> {
+        let ids: Vec<Uuid> = db
+            .fetch_all_as::<(Uuid,)>(
+                "SELECT DISTINCT user_id FROM forum.subscriptions WHERE forum_id = $1 AND user_id <> $2",
+                params![forum_id, exclude],
+            )
+            .await?
+            .into_iter()
+            .map(|(u,)| u)
+            .collect();
         Ok(ids)
     }
 
     // ── Read markers (unread tracking) ────────────────────────────────────────
 
-    pub async fn mark_read(user_id: Uuid, topic_id: Uuid, last_read_post_id: Option<Uuid>, db: &PgPool) -> Result<()> {
-        sqlx::query(
-            "INSERT INTO forum.read_markers (user_id, topic_id, last_read_post_id, read_at)
-             VALUES ($1, $2, $3, NOW())
-             ON CONFLICT (user_id, topic_id)
-             DO UPDATE SET last_read_post_id = EXCLUDED.last_read_post_id, read_at = NOW()",
-        )
-        .bind(user_id)
-        .bind(topic_id)
-        .bind(last_read_post_id)
-        .execute(db)
-        .await?;
+    pub async fn mark_read(user_id: Uuid, topic_id: Uuid, last_read_post_id: Option<Uuid>, db: &DbPool) -> Result<()> {
+        let b = db.backend();
+        let sql = format!(
+            "INSERT INTO forum.read_markers (user_id, topic_id, last_read_post_id, read_at) \
+             VALUES ($1, $2, $3, $4){}",
+            b.upsert(
+                "read_markers",
+                &["user_id", "topic_id"],
+                &[Assign::Incoming("last_read_post_id"), Assign::Incoming("read_at")],
+            )
+        );
+        db.execute(&sql, params![user_id, topic_id, last_read_post_id, Utc::now()]).await?;
+        Ok(())
+    }
+
+    /// Sets (or refreshes) a read marker's timestamp without touching
+    /// `last_read_post_id` — the "mark read" bulk operations' per-topic write.
+    async fn bump_read(db: &DbPool, user_id: Uuid, topic_id: Uuid) -> Result<()> {
+        let b = db.backend();
+        let sql = format!(
+            "INSERT INTO forum.read_markers (user_id, topic_id, read_at) VALUES ($1, $2, $3){}",
+            b.upsert("read_markers", &["user_id", "topic_id"], &[Assign::Incoming("read_at")])
+        );
+        db.execute(&sql, params![user_id, topic_id, Utc::now()]).await?;
         Ok(())
     }
 
     /// Read markers for all the topics of a forum, for the given user.
-    pub async fn read_state_for_forum(user_id: Uuid, forum_id: Uuid, db: &PgPool) -> Result<Vec<ReadState>> {
-        let rows = sqlx::query_as::<_, ReadState>(
-            "SELECT rm.topic_id, rm.last_read_post_id
-               FROM forum.read_markers rm
-               JOIN forum.topics t ON t.id = rm.topic_id
-              WHERE rm.user_id = $1 AND t.forum_id = $2",
-        )
-        .bind(user_id)
-        .bind(forum_id)
-        .fetch_all(db)
-        .await?;
+    pub async fn read_state_for_forum(user_id: Uuid, forum_id: Uuid, db: &DbPool) -> Result<Vec<ReadState>> {
+        let rows = db
+            .fetch_all_as::<ReadState>(
+                "SELECT rm.topic_id, rm.last_read_post_id \
+                   FROM forum.read_markers rm \
+                   JOIN forum.topics t ON t.id = rm.topic_id \
+                  WHERE rm.user_id = $1 AND t.forum_id = $2",
+                params![user_id, forum_id],
+            )
+            .await?;
         Ok(rows)
     }
 
-    /// "Mark forum read": upserts a read marker for every topic of the forum
-    /// that is visible to the caller (not soft-deleted, and either approved or
-    /// authored by them), regardless of when the topic last received a post.
-    /// The caller must already have checked `can_view` on the forum.
-    pub async fn mark_forum_read(user_id: Uuid, forum_id: Uuid, db: &PgPool) -> Result<()> {
-        sqlx::query(
-            "INSERT INTO forum.read_markers (user_id, topic_id, read_at)
-             SELECT $1, t.id, NOW()
-               FROM forum.topics t
-              WHERE t.forum_id = $2 AND t.is_deleted = FALSE
-                AND (t.is_approved = TRUE OR t.author_id = $1)
-             ON CONFLICT (user_id, topic_id) DO UPDATE SET read_at = NOW()",
-        )
-        .bind(user_id)
-        .bind(forum_id)
-        .execute(db)
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, user_id = %user_id, forum_id = %forum_id, "failed to mark forum read");
-            e
-        })?;
+    /// "Mark forum read": marks every topic of the forum visible to the caller
+    /// (not soft-deleted, and either approved or authored by them). The caller
+    /// must already have checked `can_view` on the forum.
+    ///
+    /// The candidate topics are gathered first and each marker is upserted
+    /// individually: an `INSERT ... SELECT ... ON CONFLICT DO UPDATE` has no
+    /// portable form (MySQL cannot read the inserted value in the update branch
+    /// of an `INSERT ... SELECT`).
+    pub async fn mark_forum_read(user_id: Uuid, forum_id: Uuid, db: &DbPool) -> Result<()> {
+        let topics = db
+            .fetch_all_as::<(Uuid,)>(
+                "SELECT t.id FROM forum.topics t \
+                  WHERE t.forum_id = $1 AND t.is_deleted = FALSE \
+                    AND (t.is_approved = TRUE OR t.author_id = $2)",
+                params![forum_id, user_id],
+            )
+            .await?;
+        for (topic_id,) in topics {
+            Self::bump_read(db, user_id, topic_id).await?;
+        }
         Ok(())
     }
 
-    /// "Mark all read": same as `mark_forum_read` but across every forum the
-    /// caller can currently see, reusing `PermissionService::push_visible_forum`
-    /// so this can never diverge from the visibility rules used elsewhere.
-    pub async fn mark_all_read(user: &ForumUser, db: &PgPool) -> Result<()> {
-        let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
-            "INSERT INTO forum.read_markers (user_id, topic_id, read_at) SELECT ",
+    /// "Mark all read": every topic the caller can currently see, reusing
+    /// `PermissionService::push_visible_forum` so visibility can never diverge.
+    pub async fn mark_all_read(user: &ForumUser, db: &DbPool) -> Result<()> {
+        let mut qb = DbQueryBuilder::new(
+            db.backend(),
+            "SELECT t.id FROM forum.topics t JOIN forum.forums f ON f.id = t.forum_id \
+              WHERE t.is_deleted = FALSE AND (t.is_approved = TRUE OR t.author_id = ",
         );
-        qb.push_bind(user.id);
-        qb.push(", t.id, NOW() FROM forum.topics t JOIN forum.forums f ON f.id = t.forum_id \
-                  WHERE t.is_deleted = FALSE AND (t.is_approved = TRUE OR t.author_id = ");
-        qb.push_bind(user.id);
-        qb.push(") AND ");
+        qb.push_bind(user.id).push(") AND ");
         PermissionService::push_visible_forum(&mut qb, "f.id", user);
-        qb.push(" ON CONFLICT (user_id, topic_id) DO UPDATE SET read_at = NOW()");
-
-        qb.build().execute(db).await.map_err(|e| {
-            tracing::error!(error = %e, user_id = %user.id, "failed to mark all read");
-            e
-        })?;
+        let topics = qb.fetch_all_as::<(Uuid,)>(db).await?;
+        for (topic_id,) in topics {
+            Self::bump_read(db, user.id, topic_id).await?;
+        }
         Ok(())
     }
 }

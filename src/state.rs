@@ -1,12 +1,12 @@
 use crate::config::instance::InstanceConfig;
 use crate::config::Settings;
 use crate::middleware::WriteRateLimiter;
-use sqlx::PgPool;
+use kubuno_db::DbPool;
 use std::sync::{Arc, RwLock};
 
 #[derive(Clone)]
 pub struct AppState {
-    pub db:       PgPool,
+    pub db:       DbPool,
     pub settings: Arc<Settings>,
     /// Instance settings from the admin console, refreshed in the background so
     /// an edit takes effect without restarting the module. Read through

@@ -7,8 +7,11 @@
 //! the thread's content — so probing a thread id reveals nothing about
 //! whether it exists.
 
+use std::collections::HashMap;
+
 use chrono::{DateTime, Utc};
-use sqlx::PgPool;
+use kubuno_db::dialect::SqlType;
+use kubuno_db::{new_id, params, DbPool, DbQueryBuilder};
 use uuid::Uuid;
 
 use crate::{
@@ -22,36 +25,35 @@ use crate::{
 /// How much of the latest message is shown in the thread list.
 const PREVIEW_CHARS: usize = 140;
 /// Defensive ceiling on how many messages a single `get_thread` call returns.
-/// Not part of the contract (no pagination was asked for) — just a guard
-/// against one enormous response for a thread nobody ever cleans up.
 const MAX_MESSAGES: i64 = 1000;
 
 pub struct PmService;
 
 #[derive(sqlx::FromRow)]
 struct ThreadSummaryRow {
-    id:                Uuid,
-    subject:           Option<String>,
-    last_message_at:   DateTime<Utc>,
-    participant_ids:   Option<Vec<Uuid>>,
-    last_body:         Option<String>,
-    unread_count:      i64,
+    id:              Uuid,
+    subject:         Option<String>,
+    last_message_at: DateTime<Utc>,
+    last_body:       Option<String>,
+    unread_count:    i64,
 }
 
 impl PmService {
     /// SECURITY: the single gate every other read/write in this module goes
     /// through. Not a participant (or a participant who has hidden the
     /// thread) → 404, indistinguishable from a thread that never existed.
-    async fn assert_participant(thread_id: Uuid, user_id: Uuid, db: &PgPool) -> Result<()> {
-        let ok: bool = sqlx::query_scalar(
-            "SELECT EXISTS(SELECT 1 FROM forum.pm_participants
-                            WHERE thread_id = $1 AND user_id = $2 AND deleted = FALSE)",
-        )
-        .bind(thread_id)
-        .bind(user_id)
-        .fetch_one(db)
-        .await?;
-        if !ok {
+    async fn assert_participant(thread_id: Uuid, user_id: Uuid, db: &DbPool) -> Result<()> {
+        let one = db.backend().cast("1", SqlType::BigInt);
+        let hit: Option<i64> = db
+            .fetch_optional_scalar(
+                &format!(
+                    "SELECT {one} FROM forum.pm_participants \
+                      WHERE thread_id = $1 AND user_id = $2 AND deleted = FALSE LIMIT 1"
+                ),
+                params![thread_id, user_id],
+            )
+            .await?;
+        if hit.is_none() {
             return Err(ForumError::NotFound(format!("PM thread {thread_id}")));
         }
         Ok(())
@@ -60,19 +62,18 @@ impl PmService {
     /// Refuses when any of `targets` has blocked `sender`. Checked before a
     /// thread is created and before every message is sent — never only at
     /// creation time, since a block can happen mid-conversation.
-    async fn assert_not_blocked(sender: Uuid, targets: &[Uuid], db: &PgPool) -> Result<()> {
+    async fn assert_not_blocked(sender: Uuid, targets: &[Uuid], db: &DbPool) -> Result<()> {
         if targets.is_empty() {
             return Ok(());
         }
-        let blocked: bool = sqlx::query_scalar(
-            "SELECT EXISTS(SELECT 1 FROM forum.pm_blocks
-                            WHERE blocked_user_id = $1 AND user_id = ANY($2))",
-        )
-        .bind(sender)
-        .bind(targets)
-        .fetch_one(db)
-        .await?;
-        if blocked {
+        let one = db.backend().cast("1", SqlType::BigInt);
+        let mut qb = DbQueryBuilder::new(
+            db.backend(),
+            format!("SELECT {one} FROM forum.pm_blocks WHERE blocked_user_id = "),
+        );
+        qb.push_bind(sender).push(" AND user_id").push_in(targets.iter().copied()).push(" LIMIT 1");
+        let blocked: Option<i64> = qb.fetch_optional_scalar(db).await?;
+        if blocked.is_some() {
             // Generic on purpose (SEC): the sender must not learn *which*
             // recipient blocked them, only that the send didn't go through.
             return Err(ForumError::Forbidden);
@@ -82,21 +83,21 @@ impl PmService {
 
     /// Same anti-flood patron as `PostService::assert_not_flooding`, applied
     /// to the sender's most recent PM instead of their most recent post.
-    /// Platform admins are exempt, same reasoning as moderators are for posts.
     async fn assert_not_flooding(
         sender: Uuid,
         is_admin: bool,
         cfg: &InstanceConfig,
-        db: &PgPool,
+        db: &DbPool,
     ) -> Result<()> {
         if is_admin || cfg.min_seconds_between_posts <= 0 {
             return Ok(());
         }
-        let last: Option<DateTime<Utc>> =
-            sqlx::query_scalar("SELECT MAX(created_at) FROM forum.pm_messages WHERE sender_id = $1")
-                .bind(sender)
-                .fetch_one(db)
-                .await?;
+        let last: Option<DateTime<Utc>> = db
+            .fetch_scalar(
+                "SELECT MAX(created_at) FROM forum.pm_messages WHERE sender_id = $1",
+                params![sender],
+            )
+            .await?;
         let Some(last) = last else { return Ok(()) };
         let elapsed = (Utc::now() - last).num_seconds();
         if elapsed < cfg.min_seconds_between_posts {
@@ -117,9 +118,7 @@ impl PmService {
         Ok(())
     }
 
-    /// Creates a thread with its first message, atomically. `dto.recipient_ids`
-    /// is deduplicated and stripped of the sender's own id before the quota,
-    /// blocklist and directory checks run.
+    /// Creates a thread with its first message, atomically.
     pub async fn create_thread(
         state: &AppState,
         sender: Uuid,
@@ -138,49 +137,47 @@ impl PmService {
         Self::assert_recipients_exist(state, &recipients).await?;
         Self::assert_not_blocked(sender, &recipients, &state.db).await?;
 
+        let thread_id = new_id();
+        let message_id = new_id();
+        let now = Utc::now();
+
         let mut tx = state.db.begin().await?;
 
-        let thread = sqlx::query_as::<_, PmThread>(
-            "INSERT INTO forum.pm_threads (subject, created_by) VALUES ($1, $2) RETURNING *",
+        tx.execute(
+            "INSERT INTO forum.pm_threads (id, subject, created_by) VALUES ($1, $2, $3)",
+            params![thread_id, dto.subject, sender],
         )
-        .bind(&dto.subject)
-        .bind(sender)
-        .fetch_one(&mut *tx)
         .await?;
 
         // The sender's own participant row starts "read" (they just wrote the
         // first message); everyone else starts unread (`last_read_at` NULL).
-        sqlx::query(
-            "INSERT INTO forum.pm_participants (thread_id, user_id, last_read_at)
-             VALUES ($1, $2, NOW())",
+        tx.execute(
+            "INSERT INTO forum.pm_participants (thread_id, user_id, last_read_at) VALUES ($1, $2, $3)",
+            params![thread_id, sender, now],
         )
-        .bind(thread.id)
-        .bind(sender)
-        .execute(&mut *tx)
         .await?;
         for uid in &recipients {
-            sqlx::query("INSERT INTO forum.pm_participants (thread_id, user_id) VALUES ($1, $2)")
-                .bind(thread.id)
-                .bind(*uid)
-                .execute(&mut *tx)
-                .await?;
+            tx.execute(
+                "INSERT INTO forum.pm_participants (thread_id, user_id) VALUES ($1, $2)",
+                params![thread_id, *uid],
+            )
+            .await?;
         }
 
-        let message = sqlx::query_as::<_, PmMessage>(
-            "INSERT INTO forum.pm_messages (thread_id, sender_id, body_md)
-             VALUES ($1, $2, $3) RETURNING *",
+        tx.execute(
+            "INSERT INTO forum.pm_messages (id, thread_id, sender_id, body_md) VALUES ($1, $2, $3, $4)",
+            params![message_id, thread_id, sender, dto.body_md],
         )
-        .bind(thread.id)
-        .bind(sender)
-        .bind(&dto.body_md)
-        .fetch_one(&mut *tx)
         .await?;
 
         tx.commit().await?;
 
+        let thread = Self::thread_row(thread_id, &state.db).await?;
+        let message = Self::message_row(message_id, &state.db).await?;
+
         for recipient in &recipients {
             crate::services::notification_service::NotificationService::notify_pm(
-                state, *recipient, sender, thread.id,
+                state, *recipient, sender, thread_id,
             )
             .await;
         }
@@ -188,8 +185,19 @@ impl PmService {
         Ok((thread, message))
     }
 
-    /// Appends a message to an existing thread. `sender` must already be a
-    /// (non-hidden) participant — see [`Self::assert_participant`].
+    async fn thread_row(id: Uuid, db: &DbPool) -> Result<PmThread> {
+        db.fetch_one_as::<PmThread>("SELECT * FROM forum.pm_threads WHERE id = $1", params![id])
+            .await
+            .map_err(Into::into)
+    }
+
+    async fn message_row(id: Uuid, db: &DbPool) -> Result<PmMessage> {
+        db.fetch_one_as::<PmMessage>("SELECT * FROM forum.pm_messages WHERE id = $1", params![id])
+            .await
+            .map_err(Into::into)
+    }
+
+    /// Appends a message to an existing thread.
     pub async fn send_message(
         state: &AppState,
         thread_id: Uuid,
@@ -201,82 +209,94 @@ impl PmService {
         Self::assert_participant(thread_id, sender, &state.db).await?;
         Self::assert_not_flooding(sender, is_admin, cfg, &state.db).await?;
 
-        let others: Vec<Uuid> = sqlx::query_scalar(
-            "SELECT user_id FROM forum.pm_participants WHERE thread_id = $1 AND user_id <> $2",
-        )
-        .bind(thread_id)
-        .bind(sender)
-        .fetch_all(&state.db)
-        .await?;
+        let others: Vec<Uuid> = state
+            .db
+            .fetch_all_as::<(Uuid,)>(
+                "SELECT user_id FROM forum.pm_participants WHERE thread_id = $1 AND user_id <> $2",
+                params![thread_id, sender],
+            )
+            .await?
+            .into_iter()
+            .map(|(u,)| u)
+            .collect();
         Self::assert_not_blocked(sender, &others, &state.db).await?;
 
+        let message_id = new_id();
+        let now = Utc::now();
         let mut tx = state.db.begin().await?;
 
-        let message = sqlx::query_as::<_, PmMessage>(
-            "INSERT INTO forum.pm_messages (thread_id, sender_id, body_md)
-             VALUES ($1, $2, $3) RETURNING *",
+        tx.execute(
+            "INSERT INTO forum.pm_messages (id, thread_id, sender_id, body_md) VALUES ($1, $2, $3, $4)",
+            params![message_id, thread_id, sender, body_md],
         )
-        .bind(thread_id)
-        .bind(sender)
-        .bind(&body_md)
-        .fetch_one(&mut *tx)
         .await?;
-
-        sqlx::query("UPDATE forum.pm_threads SET last_message_at = NOW() WHERE id = $1")
-            .bind(thread_id)
-            .execute(&mut *tx)
-            .await?;
-        // The sender's own message is never "unread" for them.
-        sqlx::query(
-            "UPDATE forum.pm_participants SET last_read_at = NOW()
-              WHERE thread_id = $1 AND user_id = $2",
+        tx.execute(
+            "UPDATE forum.pm_threads SET last_message_at = $1 WHERE id = $2",
+            params![now, thread_id],
         )
-        .bind(thread_id)
-        .bind(sender)
-        .execute(&mut *tx)
+        .await?;
+        // The sender's own message is never "unread" for them.
+        tx.execute(
+            "UPDATE forum.pm_participants SET last_read_at = $1 WHERE thread_id = $2 AND user_id = $3",
+            params![now, thread_id, sender],
+        )
         .await?;
 
         tx.commit().await?;
 
+        let message = Self::message_row(message_id, &state.db).await?;
         for recipient in &others {
             crate::services::notification_service::NotificationService::notify_pm(
                 state, *recipient, sender, thread_id,
             )
             .await;
         }
-
         Ok(message)
     }
 
     /// `GET /me/pm` rows, most recently active thread first.
-    pub async fn list_threads(user_id: Uuid, limit: i64, offset: i64, db: &PgPool) -> Result<Vec<ThreadSummary>> {
-        let rows = sqlx::query_as::<_, ThreadSummaryRow>(
-            "SELECT
-                t.id, t.subject, t.last_message_at,
-                (SELECT array_agg(pp.user_id) FROM forum.pm_participants pp
-                  WHERE pp.thread_id = t.id) AS participant_ids,
-                (SELECT m.body_md FROM forum.pm_messages m
-                  WHERE m.thread_id = t.id ORDER BY m.created_at DESC LIMIT 1) AS last_body,
-                (SELECT COUNT(*) FROM forum.pm_messages m
-                  WHERE m.thread_id = t.id AND m.sender_id <> $1
-                    AND m.created_at > COALESCE(p.last_read_at, '-infinity'::timestamptz)) AS unread_count
-             FROM forum.pm_threads t
-             JOIN forum.pm_participants p ON p.thread_id = t.id AND p.user_id = $1 AND p.deleted = FALSE
-             ORDER BY t.last_message_at DESC
-             LIMIT $2 OFFSET $3",
-        )
-        .bind(user_id)
-        .bind(limit)
-        .bind(offset)
-        .fetch_all(db)
-        .await?;
+    pub async fn list_threads(user_id: Uuid, limit: i64, offset: i64, db: &DbPool) -> Result<Vec<ThreadSummary>> {
+        // `array_agg` has no portable spelling: the participant ids are fetched
+        // in a second grouped query and stitched in Rust. The unread count uses
+        // `last_read_at IS NULL OR created_at > last_read_at` in place of the
+        // PostgreSQL-only `COALESCE(..., '-infinity'::timestamptz)`.
+        let rows = db
+            .fetch_all_as::<ThreadSummaryRow>(
+                "SELECT \
+                    t.id, t.subject, t.last_message_at, \
+                    (SELECT m.body_md FROM forum.pm_messages m \
+                      WHERE m.thread_id = t.id ORDER BY m.created_at DESC LIMIT 1) AS last_body, \
+                    (SELECT COUNT(*) FROM forum.pm_messages m \
+                      WHERE m.thread_id = t.id AND m.sender_id <> $1 \
+                        AND (p.last_read_at IS NULL OR m.created_at > p.last_read_at)) AS unread_count \
+                 FROM forum.pm_threads t \
+                 JOIN forum.pm_participants p ON p.thread_id = t.id AND p.user_id = $2 AND p.deleted = FALSE \
+                 ORDER BY t.last_message_at DESC \
+                 LIMIT $3 OFFSET $4",
+                params![user_id, user_id, limit, offset],
+            )
+            .await?;
+
+        let thread_ids: Vec<Uuid> = rows.iter().map(|r| r.id).collect();
+        let mut participants: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
+        if !thread_ids.is_empty() {
+            let mut qb = DbQueryBuilder::new(
+                db.backend(),
+                "SELECT thread_id, user_id FROM forum.pm_participants WHERE thread_id",
+            );
+            qb.push_in(thread_ids.iter().copied());
+            let pairs: Vec<(Uuid, Uuid)> = qb.fetch_all_as(db).await?;
+            for (tid, uid) in pairs {
+                participants.entry(tid).or_default().push(uid);
+            }
+        }
 
         Ok(rows
             .into_iter()
             .map(|r| ThreadSummary {
+                participant_ids:      participants.remove(&r.id).unwrap_or_default(),
                 id:                   r.id,
                 subject:              r.subject,
-                participant_ids:      r.participant_ids.unwrap_or_default(),
                 last_message_at:      r.last_message_at,
                 last_message_preview: r.last_body.map(|b| Self::truncate(&b)),
                 unread_count:         r.unread_count,
@@ -284,45 +304,46 @@ impl PmService {
             .collect())
     }
 
-    /// Number of threads with at least one unread message for this user —
-    /// the bell/badge count.
-    pub async fn unread_count(user_id: Uuid, db: &PgPool) -> Result<i64> {
-        let n: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM forum.pm_participants p
-              WHERE p.user_id = $1 AND p.deleted = FALSE
-                AND EXISTS (SELECT 1 FROM forum.pm_messages m
-                             WHERE m.thread_id = p.thread_id AND m.sender_id <> $1
-                               AND m.created_at > COALESCE(p.last_read_at, '-infinity'::timestamptz))",
-        )
-        .bind(user_id)
-        .fetch_one(db)
-        .await?;
+    /// Number of threads with at least one unread message for this user.
+    pub async fn unread_count(user_id: Uuid, db: &DbPool) -> Result<i64> {
+        let n: i64 = db
+            .fetch_scalar(
+                "SELECT COUNT(*) FROM forum.pm_participants p \
+                  WHERE p.user_id = $1 AND p.deleted = FALSE \
+                    AND EXISTS (SELECT 1 FROM forum.pm_messages m \
+                                 WHERE m.thread_id = p.thread_id AND m.sender_id <> $2 \
+                                   AND (p.last_read_at IS NULL OR m.created_at > p.last_read_at))",
+                params![user_id, user_id],
+            )
+            .await?;
         Ok(n)
     }
 
     /// `GET /me/pm/:id` — 404 for a non-participant (SEC), never the content.
-    pub async fn get_thread(thread_id: Uuid, user_id: Uuid, db: &PgPool) -> Result<(ThreadDetail, Vec<PmMessage>)> {
+    pub async fn get_thread(thread_id: Uuid, user_id: Uuid, db: &DbPool) -> Result<(ThreadDetail, Vec<PmMessage>)> {
         Self::assert_participant(thread_id, user_id, db).await?;
 
-        let thread = sqlx::query_as::<_, PmThread>("SELECT * FROM forum.pm_threads WHERE id = $1")
-            .bind(thread_id)
-            .fetch_optional(db)
+        let thread = db
+            .fetch_optional_as::<PmThread>("SELECT * FROM forum.pm_threads WHERE id = $1", params![thread_id])
             .await?
             .ok_or_else(|| ForumError::NotFound(format!("PM thread {thread_id}")))?;
 
-        let participant_ids: Vec<Uuid> =
-            sqlx::query_scalar("SELECT user_id FROM forum.pm_participants WHERE thread_id = $1")
-                .bind(thread_id)
-                .fetch_all(db)
-                .await?;
+        let participant_ids: Vec<Uuid> = db
+            .fetch_all_as::<(Uuid,)>(
+                "SELECT user_id FROM forum.pm_participants WHERE thread_id = $1",
+                params![thread_id],
+            )
+            .await?
+            .into_iter()
+            .map(|(u,)| u)
+            .collect();
 
-        let messages = sqlx::query_as::<_, PmMessage>(
-            "SELECT * FROM forum.pm_messages WHERE thread_id = $1 ORDER BY created_at ASC LIMIT $2",
-        )
-        .bind(thread_id)
-        .bind(MAX_MESSAGES)
-        .fetch_all(db)
-        .await?;
+        let messages = db
+            .fetch_all_as::<PmMessage>(
+                "SELECT * FROM forum.pm_messages WHERE thread_id = $1 ORDER BY created_at ASC LIMIT $2",
+                params![thread_id, MAX_MESSAGES],
+            )
+            .await?;
 
         Ok((
             ThreadDetail { id: thread.id, subject: thread.subject, participant_ids },
@@ -331,46 +352,36 @@ impl PmService {
     }
 
     /// `POST /me/pm/:id/read`.
-    pub async fn mark_read(thread_id: Uuid, user_id: Uuid, db: &PgPool) -> Result<()> {
+    pub async fn mark_read(thread_id: Uuid, user_id: Uuid, db: &DbPool) -> Result<()> {
         Self::assert_participant(thread_id, user_id, db).await?;
-        sqlx::query(
-            "UPDATE forum.pm_participants SET last_read_at = NOW()
-              WHERE thread_id = $1 AND user_id = $2",
+        db.execute(
+            "UPDATE forum.pm_participants SET last_read_at = $1 WHERE thread_id = $2 AND user_id = $3",
+            params![Utc::now(), thread_id, user_id],
         )
-        .bind(thread_id)
-        .bind(user_id)
-        .execute(db)
         .await?;
         Ok(())
     }
 
     /// `DELETE /me/pm/:id` — hides the thread for this participant only.
-    /// Once every participant has hidden it, the thread (and its messages)
-    /// are dropped for good, in the same transaction as the last hide.
-    pub async fn delete_for_user(thread_id: Uuid, user_id: Uuid, db: &PgPool) -> Result<()> {
+    pub async fn delete_for_user(thread_id: Uuid, user_id: Uuid, db: &DbPool) -> Result<()> {
         Self::assert_participant(thread_id, user_id, db).await?;
 
         let mut tx = db.begin().await?;
-        sqlx::query(
-            "UPDATE forum.pm_participants SET deleted = TRUE
-              WHERE thread_id = $1 AND user_id = $2",
+        tx.execute(
+            "UPDATE forum.pm_participants SET deleted = TRUE WHERE thread_id = $1 AND user_id = $2",
+            params![thread_id, user_id],
         )
-        .bind(thread_id)
-        .bind(user_id)
-        .execute(&mut *tx)
         .await?;
 
-        let remaining: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM forum.pm_participants WHERE thread_id = $1 AND deleted = FALSE",
-        )
-        .bind(thread_id)
-        .fetch_one(&mut *tx)
-        .await?;
+        let remaining: i64 = tx
+            .fetch_optional_scalar(
+                "SELECT COUNT(*) FROM forum.pm_participants WHERE thread_id = $1 AND deleted = FALSE",
+                params![thread_id],
+            )
+            .await?
+            .unwrap_or(0);
         if remaining == 0 {
-            sqlx::query("DELETE FROM forum.pm_threads WHERE id = $1")
-                .bind(thread_id)
-                .execute(&mut *tx)
-                .await?;
+            tx.execute("DELETE FROM forum.pm_threads WHERE id = $1", params![thread_id]).await?;
         }
 
         tx.commit().await?;
@@ -378,44 +389,45 @@ impl PmService {
     }
 
     /// `POST /me/pm/blocks`.
-    pub async fn block(user_id: Uuid, target: Uuid, db: &PgPool) -> Result<()> {
+    pub async fn block(user_id: Uuid, target: Uuid, db: &DbPool) -> Result<()> {
         if target == user_id {
             return Err(ForumError::Validation("impossible de se bloquer soi-même".into()));
         }
-        sqlx::query(
-            "INSERT INTO forum.pm_blocks (user_id, blocked_user_id) VALUES ($1, $2)
-             ON CONFLICT DO NOTHING",
-        )
-        .bind(user_id)
-        .bind(target)
-        .execute(db)
-        .await?;
+        let b = db.backend();
+        let sql = format!(
+            "INSERT {}INTO forum.pm_blocks (user_id, blocked_user_id) VALUES ($1, $2){}",
+            b.insert_ignore_prefix(),
+            b.on_conflict_do_nothing(&["user_id", "blocked_user_id"])
+        );
+        db.execute(&sql, params![user_id, target]).await?;
         Ok(())
     }
 
     /// `DELETE /me/pm/blocks/:uid`.
-    pub async fn unblock(user_id: Uuid, target: Uuid, db: &PgPool) -> Result<()> {
-        sqlx::query("DELETE FROM forum.pm_blocks WHERE user_id = $1 AND blocked_user_id = $2")
-            .bind(user_id)
-            .bind(target)
-            .execute(db)
-            .await?;
+    pub async fn unblock(user_id: Uuid, target: Uuid, db: &DbPool) -> Result<()> {
+        db.execute(
+            "DELETE FROM forum.pm_blocks WHERE user_id = $1 AND blocked_user_id = $2",
+            params![user_id, target],
+        )
+        .await?;
         Ok(())
     }
 
     /// `GET /me/pm/blocks`.
-    pub async fn list_blocks(user_id: Uuid, db: &PgPool) -> Result<Vec<Uuid>> {
-        let rows: Vec<Uuid> = sqlx::query_scalar(
-            "SELECT blocked_user_id FROM forum.pm_blocks WHERE user_id = $1 ORDER BY created_at DESC",
-        )
-        .bind(user_id)
-        .fetch_all(db)
-        .await?;
+    pub async fn list_blocks(user_id: Uuid, db: &DbPool) -> Result<Vec<Uuid>> {
+        let rows: Vec<Uuid> = db
+            .fetch_all_as::<(Uuid,)>(
+                "SELECT blocked_user_id FROM forum.pm_blocks WHERE user_id = $1 ORDER BY created_at DESC",
+                params![user_id],
+            )
+            .await?
+            .into_iter()
+            .map(|(u,)| u)
+            .collect();
         Ok(rows)
     }
 
-    /// Truncates a message body to [`PREVIEW_CHARS`] on a `char` boundary
-    /// (never a byte boundary — the body is arbitrary UTF-8 Markdown).
+    /// Truncates a message body to [`PREVIEW_CHARS`] on a `char` boundary.
     fn truncate(body: &str) -> String {
         let mut chars = body.chars();
         let head: String = chars.by_ref().take(PREVIEW_CHARS).collect();

@@ -19,8 +19,8 @@
 
 use std::sync::{LazyLock, RwLock};
 
+use kubuno_db::{new_id, params, DbPool};
 use regex::Regex;
-use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::{
@@ -63,7 +63,7 @@ impl CensorService {
     /// to compile (defensive check only — patterns are escaped literals, so
     /// this should not happen in practice) is skipped and logged rather than
     /// failing the whole reload.
-    pub async fn reload(db: &PgPool) -> Result<()> {
+    pub async fn reload(db: &DbPool) -> Result<()> {
         let words = Self::list(db).await?;
         let mut compiled = Vec::with_capacity(words.len());
         for w in &words {
@@ -84,39 +84,45 @@ impl CensorService {
         Ok(())
     }
 
-    pub async fn list(db: &PgPool) -> Result<Vec<CensoredWord>> {
-        let rows = sqlx::query_as::<_, CensoredWord>(
-            "SELECT * FROM forum.censored_words ORDER BY created_at",
-        )
-        .fetch_all(db)
-        .await?;
+    pub async fn list(db: &DbPool) -> Result<Vec<CensoredWord>> {
+        let rows = db
+            .fetch_all_as::<CensoredWord>(
+                "SELECT * FROM forum.censored_words ORDER BY created_at",
+                params![],
+            )
+            .await?;
         Ok(rows)
     }
 
-    pub async fn create(dto: CreateCensoredWordDto, db: &PgPool) -> Result<CensoredWord> {
+    pub async fn create(dto: CreateCensoredWordDto, db: &DbPool) -> Result<CensoredWord> {
         let replacement = dto
             .replacement
             .as_deref()
             .map(str::trim)
             .filter(|s| !s.is_empty())
-            .unwrap_or("***");
-        let word = sqlx::query_as::<_, CensoredWord>(
-            "INSERT INTO forum.censored_words (pattern, replacement) VALUES ($1, $2) RETURNING *",
+            .unwrap_or("***")
+            .to_string();
+        let id = new_id();
+        db.execute(
+            "INSERT INTO forum.censored_words (id, pattern, replacement) VALUES ($1, $2, $3)",
+            params![id, dto.pattern.trim(), replacement],
         )
-        .bind(dto.pattern.trim())
-        .bind(replacement)
-        .fetch_one(db)
         .await?;
+        let word = db
+            .fetch_one_as::<CensoredWord>(
+                "SELECT * FROM forum.censored_words WHERE id = $1",
+                params![id],
+            )
+            .await?;
         Self::reload(db).await?;
         Ok(word)
     }
 
-    pub async fn delete(id: Uuid, db: &PgPool) -> Result<()> {
-        let r = sqlx::query("DELETE FROM forum.censored_words WHERE id = $1")
-            .bind(id)
-            .execute(db)
+    pub async fn delete(id: Uuid, db: &DbPool) -> Result<()> {
+        let affected = db
+            .execute("DELETE FROM forum.censored_words WHERE id = $1", params![id])
             .await?;
-        if r.rows_affected() == 0 {
+        if affected == 0 {
             return Err(ForumError::NotFound(format!("Censored word {id}")));
         }
         Self::reload(db).await?;

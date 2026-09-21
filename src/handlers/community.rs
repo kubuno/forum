@@ -2,9 +2,9 @@ use axum::{
     extract::{Query, State},
     Extension, Json,
 };
+use kubuno_db::DbQueryBuilder;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use sqlx::{Postgres, QueryBuilder};
 use uuid::Uuid;
 
 use axum::http::StatusCode;
@@ -144,12 +144,13 @@ pub struct TeamMember {
 /// listing uses (SEC-01/14): a forum hidden from the caller never leaks its
 /// moderators either.
 pub async fn team(State(state): State<AppState>, Extension(user): Extension<ForumUser>) -> Result<Json<Value>> {
-    let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
+    let mut qb = DbQueryBuilder::new(
+        state.db.backend(),
         "SELECT m.forum_id, f.name AS forum_name, m.user_id \
          FROM forum.moderators m JOIN forum.forums f ON f.id = m.forum_id WHERE ",
     );
     PermissionService::push_visible_forum(&mut qb, "f.id", &user);
     qb.push(" ORDER BY f.position, f.name, m.created_at");
-    let moderators = qb.build_query_as::<TeamMember>().fetch_all(&state.db).await?;
+    let moderators = qb.fetch_all_as::<TeamMember>(&state.db).await?;
     Ok(Json(json!({ "moderators": moderators })))
 }

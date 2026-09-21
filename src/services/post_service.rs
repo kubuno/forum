@@ -1,4 +1,6 @@
-use sqlx::PgPool;
+use chrono::{DateTime, Utc};
+use kubuno_db::search::normalize;
+use kubuno_db::{new_id, params, DbPool};
 use uuid::Uuid;
 
 use crate::{
@@ -24,21 +26,17 @@ impl PostService {
         is_moderator: bool,
         limit: i64,
         offset: i64,
-        db: &PgPool,
+        db: &DbPool,
     ) -> Result<Vec<Post>> {
-        let rows = sqlx::query_as::<_, Post>(
-            "SELECT * FROM forum.posts
-              WHERE topic_id = $1 AND is_deleted = FALSE
-                AND (is_approved = TRUE OR author_id = $2 OR $3::boolean)
-             ORDER BY created_at, id LIMIT $4 OFFSET $5",
-        )
-        .bind(topic_id)
-        .bind(viewer_id)
-        .bind(is_moderator)
-        .bind(limit)
-        .bind(offset)
-        .fetch_all(db)
-        .await?;
+        let rows = db
+            .fetch_all_as::<Post>(
+                "SELECT * FROM forum.posts \
+                  WHERE topic_id = $1 AND is_deleted = FALSE \
+                    AND (is_approved = TRUE OR author_id = $2 OR $3) \
+                 ORDER BY created_at, id LIMIT $4 OFFSET $5",
+                params![topic_id, viewer_id, is_moderator, limit, offset],
+            )
+            .await?;
         Ok(rows)
     }
 
@@ -46,25 +44,21 @@ impl PostService {
         topic_id: Uuid,
         viewer_id: Uuid,
         is_moderator: bool,
-        db: &PgPool,
+        db: &DbPool,
     ) -> Result<i64> {
-        let n: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM forum.posts
-              WHERE topic_id = $1 AND is_deleted = FALSE
-                AND (is_approved = TRUE OR author_id = $2 OR $3::boolean)",
-        )
-        .bind(topic_id)
-        .bind(viewer_id)
-        .bind(is_moderator)
-        .fetch_one(db)
-        .await?;
+        let n: i64 = db
+            .fetch_scalar(
+                "SELECT COUNT(*) FROM forum.posts \
+                  WHERE topic_id = $1 AND is_deleted = FALSE \
+                    AND (is_approved = TRUE OR author_id = $2 OR $3)",
+                params![topic_id, viewer_id, is_moderator],
+            )
+            .await?;
         Ok(n)
     }
 
-    pub async fn get(id: Uuid, db: &PgPool) -> Result<Post> {
-        sqlx::query_as::<_, Post>("SELECT * FROM forum.posts WHERE id = $1")
-            .bind(id)
-            .fetch_optional(db)
+    pub async fn get(id: Uuid, db: &DbPool) -> Result<Post> {
+        db.fetch_optional_as::<Post>("SELECT * FROM forum.posts WHERE id = $1", params![id])
             .await?
             .ok_or_else(|| ForumError::NotFound(format!("Post {id}")))
     }
@@ -82,23 +76,31 @@ impl PostService {
         author_id: Uuid,
         dto: CreatePostDto,
         approved: bool,
-        db: &PgPool,
+        db: &DbPool,
     ) -> Result<Post> {
-        let mut tx = db.begin().await?;
+        let id = new_id();
+        // approved_at is stamped only when the message is published straight away.
+        let approved_at: Option<DateTime<Utc>> = if approved { Some(Utc::now()) } else { None };
 
-        let post = sqlx::query_as::<_, Post>(
-            "INSERT INTO forum.posts
-                (topic_id, forum_id, author_id, body_md, reply_to_post_id, is_first_post,
-                 is_approved, approved_at)
-             VALUES ($1, $2, $3, $4, $5, FALSE, $6, CASE WHEN $6::boolean THEN NOW() END) RETURNING *",
+        let body_norm = normalize(&dto.body_md);
+        let mut tx = db.begin().await?;
+        tx.execute(
+            "INSERT INTO forum.posts \
+                (id, topic_id, forum_id, author_id, body_md, reply_to_post_id, is_first_post, \
+                 is_approved, approved_at, body_norm) \
+             VALUES ($1, $2, $3, $4, $5, $6, FALSE, $7, $8, $9)",
+            params![
+                id,
+                topic_id,
+                forum_id,
+                author_id,
+                dto.body_md,
+                dto.reply_to_post_id,
+                approved,
+                approved_at,
+                body_norm
+            ],
         )
-        .bind(topic_id)
-        .bind(forum_id)
-        .bind(author_id)
-        .bind(&dto.body_md)
-        .bind(dto.reply_to_post_id)
-        .bind(approved)
-        .fetch_one(&mut *tx)
         .await?;
 
         aggregates::recompute_topic(&mut tx, topic_id).await?;
@@ -108,20 +110,18 @@ impl PostService {
         }
 
         tx.commit().await?;
-        Ok(post)
+        Self::get(id, db).await
     }
 
     /// Timestamp of this author's most recent message, for flood control.
-    pub async fn last_post_at(
-        author_id: Uuid,
-        db: &PgPool,
-    ) -> Result<Option<chrono::DateTime<chrono::Utc>>> {
-        let ts: Option<chrono::DateTime<chrono::Utc>> = sqlx::query_scalar(
-            "SELECT MAX(created_at) FROM forum.posts WHERE author_id = $1",
-        )
-        .bind(author_id)
-        .fetch_one(db)
-        .await?;
+    pub async fn last_post_at(author_id: Uuid, db: &DbPool) -> Result<Option<DateTime<Utc>>> {
+        // MAX over no rows still returns one NULL row, so decode a nullable scalar.
+        let ts: Option<DateTime<Utc>> = db
+            .fetch_scalar(
+                "SELECT MAX(created_at) FROM forum.posts WHERE author_id = $1",
+                params![author_id],
+            )
+            .await?;
         Ok(ts)
     }
 
@@ -132,7 +132,7 @@ impl PostService {
         author_id: Uuid,
         is_moderator: bool,
         cfg: &InstanceConfig,
-        db: &PgPool,
+        db: &DbPool,
     ) -> Result<()> {
         if is_moderator || cfg.min_seconds_between_posts <= 0 {
             return Ok(());
@@ -152,7 +152,7 @@ impl PostService {
         user: &ForumUser,
         dto: UpdatePostDto,
         cfg: &InstanceConfig,
-        db: &PgPool,
+        db: &DbPool,
     ) -> Result<Post> {
         let post = Self::get(id, db).await?;
         // A message removed by moderation is not editable back into existence.
@@ -180,50 +180,51 @@ impl PostService {
         // an edit is never recorded without its predecessor being preserved.
         let mut tx = db.begin().await?;
 
-        sqlx::query(
-            "INSERT INTO forum.post_revisions (post_id, body_md, edited_by, edit_reason)
-             VALUES ($1, $2, $3, $4)",
+        tx.execute(
+            "INSERT INTO forum.post_revisions (id, post_id, body_md, edited_by, edit_reason) \
+             VALUES ($1, $2, $3, $4, $5)",
+            params![new_id(), id, post.body_md, post.edited_by, post.edit_reason],
         )
-        .bind(id)
-        .bind(&post.body_md)
-        .bind(post.edited_by)
-        .bind(&post.edit_reason)
-        .execute(&mut *tx)
         .await?;
 
-        let row = sqlx::query_as::<_, Post>(
-            "UPDATE forum.posts SET
-                body_md     = $2,
-                edited_at   = NOW(),
-                edited_by   = $3,
-                edit_reason = $4,
-                edit_count  = edit_count + 1
-             WHERE id = $1 RETURNING *",
+        let body_norm = normalize(&dto.body_md);
+        tx.execute(
+            "UPDATE forum.posts SET \
+                body_md     = $1, \
+                body_norm   = $2, \
+                edited_at   = $3, \
+                edited_by   = $4, \
+                edit_reason = $5, \
+                edit_count  = edit_count + 1 \
+             WHERE id = $6",
+            params![
+                dto.body_md,
+                body_norm,
+                Utc::now(),
+                user.id,
+                dto.edit_reason,
+                id
+            ],
         )
-        .bind(id)
-        .bind(&dto.body_md)
-        .bind(user.id)
-        .bind(&dto.edit_reason)
-        .fetch_one(&mut *tx)
         .await?;
 
         tx.commit().await?;
-        Ok(row)
+        Self::get(id, db).await
     }
 
     /// Edit history of a post, newest first. Access control is the caller's
     /// job (see `handlers::posts::list_revisions`).
-    pub async fn list_revisions(post_id: Uuid, db: &PgPool) -> Result<Vec<PostRevision>> {
-        let rows = sqlx::query_as::<_, PostRevision>(
-            "SELECT * FROM forum.post_revisions WHERE post_id = $1 ORDER BY created_at DESC",
-        )
-        .bind(post_id)
-        .fetch_all(db)
-        .await?;
+    pub async fn list_revisions(post_id: Uuid, db: &DbPool) -> Result<Vec<PostRevision>> {
+        let rows = db
+            .fetch_all_as::<PostRevision>(
+                "SELECT * FROM forum.post_revisions WHERE post_id = $1 ORDER BY created_at DESC",
+                params![post_id],
+            )
+            .await?;
         Ok(rows)
     }
 
-    pub async fn delete(id: Uuid, user: &ForumUser, db: &PgPool) -> Result<()> {
+    pub async fn delete(id: Uuid, user: &ForumUser, db: &DbPool) -> Result<()> {
         let post = Self::get(id, db).await?;
         if post.is_first_post {
             return Err(ForumError::Conflict(
@@ -236,10 +237,7 @@ impl PostService {
         }
 
         let mut tx = db.begin().await?;
-        sqlx::query("DELETE FROM forum.posts WHERE id = $1")
-            .bind(id)
-            .execute(&mut *tx)
-            .await?;
+        tx.execute("DELETE FROM forum.posts WHERE id = $1", params![id]).await?;
         aggregates::recompute_topic(&mut tx, post.topic_id).await?;
         aggregates::recompute_forum(&mut tx, post.forum_id).await?;
         // Only an approved message was ever counted, so only that one is undone.

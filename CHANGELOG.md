@@ -9,8 +9,34 @@ number at release time, and CI publishes that section as the GitHub Release note
 
 ## [Unreleased]
 
+### Changed
+
+- **The forum now runs on PostgreSQL, MySQL/MariaDB or SQLite.** The engine is an
+  administrator choice read at run time (`[database] engine`), and a single
+  binary connects to whichever is named — no rebuild. The module was moved off
+  its PostgreSQL-only stack onto the shared `kubuno-db` foundation: one enum pool
+  in place of `PgPool`, engine-agnostic bind parameters, and the fragments the
+  three engines spell differently (`ON CONFLICT`/`ON DUPLICATE KEY`, `RETURNING`,
+  `= ANY`, casts, upserts) produced by the dialect layer. Every insert now mints
+  its primary key in the process (no `RETURNING`, which MySQL lacks), reads
+  integer results at a portable width, and keeps all SQL schema-qualified with
+  strictly increasing, never-reused placeholders.
+- **Full-text search rebuilt to work on every engine.** Post bodies and topic
+  titles are reduced to Snowball French stems and deaccented at write time
+  (stored in `posts.body_norm` / `topics.title_norm`), and a query is put through
+  the same reduction and matched with a portable `LIKE`, ranked title over body —
+  replacing the PostgreSQL-only `tsvector` / `websearch_to_tsquery` /
+  `ts_rank_cd` / `ts_headline` pipeline. Search results keep their highlighted
+  snippet. Typo tolerance that relied on `pg_trgm` is dropped; inflected and
+  accented queries still match.
+
 ### Security
 
+- **Duplicate-report protection preserved on every engine.** The "one open
+  report per member per post" guard, previously a PostgreSQL partial unique
+  index (which MySQL cannot express), is now enforced in the service before the
+  insert, so re-reporting a post you have already flagged is still refused until
+  the first report is handled.
 - **Database driver updated past an unfixable advisory.** The previous line
   pulled in an RSA implementation vulnerable to a timing side-channel
   (RUSTSEC-2023-0071) for which no fix will ever exist. The new line does not

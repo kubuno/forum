@@ -117,10 +117,11 @@ async fn assert_can_moderate(user: &ForumUser, state: &AppState) -> Result<()> {
     if user.is_admin() {
         return Ok(());
     }
-    let any: Option<i32> = sqlx::query_scalar("SELECT 1 FROM forum.moderators WHERE user_id = $1 LIMIT 1")
-        .bind(user.id)
-        .fetch_optional(&state.db)
-        .await?;
+    let sql = format!(
+        "SELECT {} FROM forum.moderators WHERE user_id = $1 LIMIT 1",
+        state.db.backend().cast("1", kubuno_db::dialect::SqlType::BigInt)
+    );
+    let any: Option<i64> = state.db.fetch_optional_scalar(&sql, kubuno_db::params![user.id]).await?;
     if any.is_some() { Ok(()) } else { Err(ForumError::Forbidden) }
 }
 
@@ -149,12 +150,13 @@ pub async fn resolve_report(
 ) -> Result<Json<Value>> {
     dto.validate().map_err(|e| ForumError::Validation(e.to_string()))?;
     // The handler must moderate the forum the reported post belongs to.
-    let forum_id: Option<Uuid> = sqlx::query_scalar(
-        "SELECT p.forum_id FROM forum.reports r JOIN forum.posts p ON p.id = r.post_id WHERE r.id = $1",
-    )
-    .bind(id)
-    .fetch_optional(&state.db)
-    .await?;
+    let forum_id: Option<Uuid> = state
+        .db
+        .fetch_optional_scalar(
+            "SELECT p.forum_id FROM forum.reports r JOIN forum.posts p ON p.id = r.post_id WHERE r.id = $1",
+            kubuno_db::params![id],
+        )
+        .await?;
     let forum_id = forum_id.ok_or_else(|| ForumError::NotFound(format!("Report {id}")))?;
     let perms = PermissionService::effective(forum_id, &user, &state.db).await?;
     if !perms.is_admin && !perms.is_moderator {
@@ -218,12 +220,16 @@ async fn moderation_scope(user: &ForumUser, state: &AppState) -> Result<Option<V
     if user.is_admin() {
         return Ok(None);
     }
-    let forums: Vec<Uuid> = sqlx::query_scalar(
-        "SELECT forum_id FROM forum.moderators WHERE user_id = $1",
-    )
-    .bind(user.id)
-    .fetch_all(&state.db)
-    .await?;
+    let forums: Vec<Uuid> = state
+        .db
+        .fetch_all_as::<(Uuid,)>(
+            "SELECT forum_id FROM forum.moderators WHERE user_id = $1",
+            kubuno_db::params![user.id],
+        )
+        .await?
+        .into_iter()
+        .map(|(f,)| f)
+        .collect();
     if forums.is_empty() {
         return Err(ForumError::Forbidden);
     }

@@ -1,5 +1,5 @@
+use kubuno_db::{new_id, params, DbPool};
 use serde_json::json;
-use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::{
@@ -30,43 +30,47 @@ impl NotificationService {
         // counting one more responder — instead of stacking a new row. Exactly
         // one row is touched (the most recent open one).
         if matches!(kind, "reply" | "reaction") {
-            let folded = sqlx::query_scalar::<_, Uuid>(
-                "UPDATE forum.notifications
-                    SET responder_count = responder_count + 1, actor_id = $4,
-                        post_id = $5, created_at = NOW()
-                  WHERE id = (SELECT id FROM forum.notifications
-                               WHERE user_id = $1 AND kind = $2 AND topic_id = $3 AND is_read = FALSE
-                               ORDER BY created_at DESC LIMIT 1)
-                 RETURNING id",
-            )
-            .bind(recipient)
-            .bind(kind)
-            .bind(topic_id)
-            .bind(actor)
-            .bind(post_id)
-            .fetch_optional(&state.db)
-            .await;
-            if let Ok(Some(id)) = folded {
-                Self::push(state, recipient, id, kind, Some(topic_id), actor).await;
-                return;
+            // No portable UPDATE ... RETURNING (MySQL has none): find the target
+            // open notification, then bump it by id. One row is touched.
+            let target = state
+                .db
+                .fetch_optional_scalar::<Uuid>(
+                    "SELECT id FROM forum.notifications \
+                      WHERE user_id = $1 AND kind = $2 AND topic_id = $3 AND is_read = FALSE \
+                      ORDER BY created_at DESC LIMIT 1",
+                    params![recipient, kind, topic_id],
+                )
+                .await;
+            if let Ok(Some(id)) = target {
+                let bumped = state
+                    .db
+                    .execute(
+                        "UPDATE forum.notifications \
+                            SET responder_count = responder_count + 1, actor_id = $1, \
+                                post_id = $2, created_at = $3 \
+                          WHERE id = $4",
+                        params![actor, post_id, chrono::Utc::now(), id],
+                    )
+                    .await;
+                if bumped.is_ok() {
+                    Self::push(state, recipient, id, kind, Some(topic_id), actor).await;
+                    return;
+                }
             }
         }
 
-        let inserted = sqlx::query_scalar::<_, Uuid>(
-            "INSERT INTO forum.notifications (user_id, kind, actor_id, topic_id, post_id, extra)
-             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
-        )
-        .bind(recipient)
-        .bind(kind)
-        .bind(actor)
-        .bind(topic_id)
-        .bind(post_id)
-        .bind(extra)
-        .fetch_one(&state.db)
-        .await;
+        let id = new_id();
+        let inserted = state
+            .db
+            .execute(
+                "INSERT INTO forum.notifications (id, user_id, kind, actor_id, topic_id, post_id, extra) \
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)",
+                params![id, recipient, kind, actor, topic_id, post_id, extra],
+            )
+            .await;
 
         match inserted {
-            Ok(id) => Self::push(state, recipient, id, kind, Some(topic_id), actor).await,
+            Ok(_) => Self::push(state, recipient, id, kind, Some(topic_id), actor).await,
             Err(e) => tracing::warn!(error = %e, "forum notification insert failed"),
         }
     }
@@ -79,18 +83,17 @@ impl NotificationService {
         if recipient == actor {
             return;
         }
-        let inserted = sqlx::query_scalar::<_, Uuid>(
-            "INSERT INTO forum.notifications (user_id, kind, actor_id, topic_id, post_id, extra)
-             VALUES ($1, $2, $3, NULL, NULL, $4) RETURNING id",
-        )
-        .bind(recipient)
-        .bind(kind)
-        .bind(actor)
-        .bind(extra)
-        .fetch_one(&state.db)
-        .await;
+        let id = new_id();
+        let inserted = state
+            .db
+            .execute(
+                "INSERT INTO forum.notifications (id, user_id, kind, actor_id, topic_id, post_id, extra) \
+                 VALUES ($1, $2, $3, $4, NULL, NULL, $5)",
+                params![id, recipient, kind, actor, extra],
+            )
+            .await;
         match inserted {
-            Ok(id) => Self::push(state, recipient, id, kind, None, actor).await,
+            Ok(_) => Self::push(state, recipient, id, kind, None, actor).await,
             Err(e) => tracing::warn!(error = %e, "forum notification insert failed"),
         }
     }
@@ -200,17 +203,17 @@ impl NotificationService {
         if recipient == actor {
             return;
         }
-        let inserted = sqlx::query_scalar::<_, Uuid>(
-            "INSERT INTO forum.notifications (user_id, kind, actor_id, topic_id, post_id, extra)
-             VALUES ($1, 'pm', $2, NULL, NULL, $3) RETURNING id",
-        )
-        .bind(recipient)
-        .bind(actor)
-        .bind(thread_id.to_string())
-        .fetch_one(&state.db)
-        .await;
+        let id = new_id();
+        let inserted = state
+            .db
+            .execute(
+                "INSERT INTO forum.notifications (id, user_id, kind, actor_id, topic_id, post_id, extra) \
+                 VALUES ($1, $2, 'pm', $3, NULL, NULL, $4)",
+                params![id, recipient, actor, thread_id.to_string()],
+            )
+            .await;
         match inserted {
-            Ok(id) => Self::push_pm(state, recipient, id, actor, thread_id).await,
+            Ok(_) => Self::push_pm(state, recipient, id, actor, thread_id).await,
             Err(e) => tracing::warn!(error = %e, "forum PM notification insert failed"),
         }
     }
@@ -256,44 +259,44 @@ impl NotificationService {
         });
     }
 
-    pub async fn list(user_id: Uuid, only_unread: bool, limit: i64, db: &PgPool) -> Result<Vec<Notification>> {
-        let rows = sqlx::query_as::<_, Notification>(
-            "SELECT * FROM forum.notifications
-             WHERE user_id = $1 AND ($2 = FALSE OR is_read = FALSE)
-             ORDER BY created_at DESC LIMIT $3",
-        )
-        .bind(user_id)
-        .bind(only_unread)
-        .bind(limit.clamp(1, 200))
-        .fetch_all(db)
-        .await?;
+    pub async fn list(user_id: Uuid, only_unread: bool, limit: i64, db: &DbPool) -> Result<Vec<Notification>> {
+        let rows = db
+            .fetch_all_as::<Notification>(
+                "SELECT * FROM forum.notifications \
+                 WHERE user_id = $1 AND ($2 = FALSE OR is_read = FALSE) \
+                 ORDER BY created_at DESC LIMIT $3",
+                params![user_id, only_unread, limit.clamp(1, 200)],
+            )
+            .await?;
         Ok(rows)
     }
 
-    pub async fn unread_count(user_id: Uuid, db: &PgPool) -> Result<i64> {
-        let n = sqlx::query_scalar::<_, i64>(
-            "SELECT COUNT(*) FROM forum.notifications WHERE user_id = $1 AND is_read = FALSE",
-        )
-        .bind(user_id)
-        .fetch_one(db)
-        .await?;
+    pub async fn unread_count(user_id: Uuid, db: &DbPool) -> Result<i64> {
+        let n = db
+            .fetch_scalar::<i64>(
+                "SELECT COUNT(*) FROM forum.notifications WHERE user_id = $1 AND is_read = FALSE",
+                params![user_id],
+            )
+            .await?;
         Ok(n)
     }
 
-    pub async fn mark_read(user_id: Uuid, id: Uuid, db: &PgPool) -> Result<()> {
-        sqlx::query("UPDATE forum.notifications SET is_read = TRUE WHERE id = $1 AND user_id = $2")
-            .bind(id)
-            .bind(user_id)
-            .execute(db)
-            .await?;
+    pub async fn mark_read(user_id: Uuid, id: Uuid, db: &DbPool) -> Result<()> {
+        db.execute(
+            "UPDATE forum.notifications SET is_read = TRUE WHERE id = $1 AND user_id = $2",
+            params![id, user_id],
+        )
+        .await?;
         Ok(())
     }
 
-    pub async fn mark_all_read(user_id: Uuid, db: &PgPool) -> Result<u64> {
-        let r = sqlx::query("UPDATE forum.notifications SET is_read = TRUE WHERE user_id = $1 AND is_read = FALSE")
-            .bind(user_id)
-            .execute(db)
+    pub async fn mark_all_read(user_id: Uuid, db: &DbPool) -> Result<u64> {
+        let affected = db
+            .execute(
+                "UPDATE forum.notifications SET is_read = TRUE WHERE user_id = $1 AND is_read = FALSE",
+                params![user_id],
+            )
             .await?;
-        Ok(r.rows_affected())
+        Ok(affected)
     }
 }

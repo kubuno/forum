@@ -17,9 +17,9 @@
 //! All user-supplied text is XML-escaped before it enters the document.
 
 use base64::Engine;
-use chrono::SecondsFormat;
+use chrono::{SecondsFormat, Utc};
+use kubuno_db::{params, DbPool, DbQueryBuilder};
 use rand::RngCore;
-use sqlx::{PgPool, Postgres, QueryBuilder};
 use uuid::Uuid;
 
 use crate::{
@@ -41,66 +41,76 @@ impl FeedService {
     }
 
     /// `POST /me/feed-tokens` — creates a feed URL for the caller.
-    pub async fn create_token(user_id: Uuid, label: Option<String>, db: &PgPool) -> Result<FeedToken> {
+    pub async fn create_token(user_id: Uuid, label: Option<String>, db: &DbPool) -> Result<FeedToken> {
         let token = Self::new_token();
         let label = label.and_then(|l| {
             let t = l.trim().to_string();
             if t.is_empty() { None } else { Some(t) }
         });
-        let row: FeedToken = sqlx::query_as(
-            "INSERT INTO forum.feed_tokens (token, user_id, label)
-             VALUES ($1, $2, $3)
-             RETURNING token, user_id, label, created_at, last_used_at",
+        // `token` is the natural (text) primary key, minted above; no RETURNING —
+        // reselect the row after inserting it.
+        db.execute(
+            "INSERT INTO forum.feed_tokens (token, user_id, label) VALUES ($1, $2, $3)",
+            params![token.clone(), user_id, label],
         )
-        .bind(&token)
-        .bind(user_id)
-        .bind(label)
-        .fetch_one(db)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, user_id = %user_id, "failed to create feed token");
             e
         })?;
-        Ok(row)
+        db.fetch_one_as::<FeedToken>(
+            "SELECT token, user_id, label, created_at, last_used_at \
+               FROM forum.feed_tokens WHERE token = $1",
+            params![token],
+        )
+        .await
+        .map_err(Into::into)
     }
 
     /// `GET /me/feed-tokens` — the caller's own tokens, newest first.
-    pub async fn list_tokens(user_id: Uuid, db: &PgPool) -> Result<Vec<FeedToken>> {
-        let rows: Vec<FeedToken> = sqlx::query_as(
-            "SELECT token, user_id, label, created_at, last_used_at
-               FROM forum.feed_tokens
-              WHERE user_id = $1
-              ORDER BY created_at DESC",
-        )
-        .bind(user_id)
-        .fetch_all(db)
-        .await?;
+    pub async fn list_tokens(user_id: Uuid, db: &DbPool) -> Result<Vec<FeedToken>> {
+        let rows = db
+            .fetch_all_as::<FeedToken>(
+                "SELECT token, user_id, label, created_at, last_used_at \
+                   FROM forum.feed_tokens \
+                  WHERE user_id = $1 \
+                  ORDER BY created_at DESC",
+                params![user_id],
+            )
+            .await?;
         Ok(rows)
     }
 
     /// `DELETE /me/feed-tokens/:token` — revokes one. Keyed on `user_id`, so a
     /// member can only ever revoke a token they own.
-    pub async fn revoke_token(user_id: Uuid, token: &str, db: &PgPool) -> Result<()> {
-        sqlx::query("DELETE FROM forum.feed_tokens WHERE user_id = $1 AND token = $2")
-            .bind(user_id)
-            .bind(token)
-            .execute(db)
-            .await?;
+    pub async fn revoke_token(user_id: Uuid, token: &str, db: &DbPool) -> Result<()> {
+        db.execute(
+            "DELETE FROM forum.feed_tokens WHERE user_id = $1 AND token = $2",
+            params![user_id, token],
+        )
+        .await?;
         Ok(())
     }
 
     /// Resolves a feed token to its owner and stamps `last_used_at`. Returns
     /// `None` for an unknown token — the public handler then answers 404, never
     /// distinguishing "no such token" from any other miss.
-    pub async fn resolve(token: &str, db: &PgPool) -> Result<Option<Uuid>> {
-        let user_id: Option<Uuid> = sqlx::query_scalar(
-            "UPDATE forum.feed_tokens SET last_used_at = NOW()
-              WHERE token = $1
-              RETURNING user_id",
-        )
-        .bind(token)
-        .fetch_optional(db)
-        .await?;
+    pub async fn resolve(token: &str, db: &DbPool) -> Result<Option<Uuid>> {
+        // No `UPDATE ... RETURNING` (MySQL lacks it): resolve first, then stamp
+        // `last_used_at` (best-effort).
+        let user_id: Option<Uuid> = db
+            .fetch_optional_scalar(
+                "SELECT user_id FROM forum.feed_tokens WHERE token = $1",
+                params![token],
+            )
+            .await?;
+        if user_id.is_some() {
+            db.execute(
+                "UPDATE forum.feed_tokens SET last_used_at = $1 WHERE token = $2",
+                params![Utc::now(), token],
+            )
+            .await?;
+        }
         Ok(user_id)
     }
 
@@ -120,7 +130,8 @@ impl FeedService {
         };
         let db = &state.db;
 
-        let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
+        let mut qb = DbQueryBuilder::new(
+            db.backend(),
             "SELECT t.id AS topic_id, t.forum_id AS forum_id, t.title AS title, \
                     t.author_id AS author_id, \
                     COALESCE(t.last_post_at, t.created_at) AS updated_at \
@@ -130,7 +141,7 @@ impl FeedService {
         PermissionService::push_visible_forum(&mut qb, "f.id", &viewer);
         qb.push(" ORDER BY updated_at DESC LIMIT 30");
 
-        let rows: Vec<FeedEntry> = qb.build_query_as().fetch_all(db).await.map_err(|e| {
+        let rows: Vec<FeedEntry> = qb.fetch_all_as(db).await.map_err(|e| {
             tracing::error!(error = %e, user_id = %user_id, "failed to build feed");
             ForumError::from(e)
         })?;

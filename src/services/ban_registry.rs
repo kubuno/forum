@@ -12,7 +12,7 @@
 use std::collections::HashSet;
 use std::sync::{LazyLock, RwLock};
 
-use sqlx::PgPool;
+use kubuno_db::{params, DbPool};
 use uuid::Uuid;
 
 use crate::errors::Result;
@@ -36,27 +36,40 @@ impl BanRegistry {
     /// and `forum.email_bans`, keeping only bans that have not expired. Never
     /// blocks the boot sequence or a mutation — a failed reload is logged and
     /// the previous cache (possibly empty) is left in place.
-    pub async fn reload(db: &PgPool) -> Result<()> {
-        let users: Vec<Uuid> = sqlx::query_scalar(
-            "SELECT user_id FROM forum.user_bans WHERE until IS NULL OR until > NOW()",
-        )
-        .fetch_all(db)
-        .await
-        .inspect_err(|e| tracing::error!(error = %e, "ban registry: loading user bans failed"))?;
+    pub async fn reload(db: &DbPool) -> Result<()> {
+        let now = chrono::Utc::now();
+        let users: Vec<Uuid> = db
+            .fetch_all_as::<(Uuid,)>(
+                "SELECT user_id FROM forum.user_bans WHERE until IS NULL OR until > $1",
+                params![now],
+            )
+            .await
+            .inspect_err(|e| tracing::error!(error = %e, "ban registry: loading user bans failed"))?
+            .into_iter()
+            .map(|(v,)| v)
+            .collect();
 
-        let ips: Vec<String> = sqlx::query_scalar(
-            "SELECT value FROM forum.ip_bans WHERE until IS NULL OR until > NOW()",
-        )
-        .fetch_all(db)
-        .await
-        .inspect_err(|e| tracing::error!(error = %e, "ban registry: loading IP bans failed"))?;
+        let ips: Vec<String> = db
+            .fetch_all_as::<(String,)>(
+                "SELECT value FROM forum.ip_bans WHERE until IS NULL OR until > $1",
+                params![now],
+            )
+            .await
+            .inspect_err(|e| tracing::error!(error = %e, "ban registry: loading IP bans failed"))?
+            .into_iter()
+            .map(|(v,)| v)
+            .collect();
 
-        let emails: Vec<String> = sqlx::query_scalar(
-            "SELECT email FROM forum.email_bans WHERE until IS NULL OR until > NOW()",
-        )
-        .fetch_all(db)
-        .await
-        .inspect_err(|e| tracing::error!(error = %e, "ban registry: loading email bans failed"))?;
+        let emails: Vec<String> = db
+            .fetch_all_as::<(String,)>(
+                "SELECT email FROM forum.email_bans WHERE until IS NULL OR until > $1",
+                params![now],
+            )
+            .await
+            .inspect_err(|e| tracing::error!(error = %e, "ban registry: loading email bans failed"))?
+            .into_iter()
+            .map(|(v,)| v)
+            .collect();
 
         match BANS.write() {
             Ok(mut guard) => {

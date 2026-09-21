@@ -17,11 +17,17 @@ const VISIBILITIES: &[&str] = &["public", "registered"];
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct ProfileField {
     pub id:            Uuid,
+    /// Stored in the `field_key` column (`key` is a reserved word in MySQL);
+    /// the API and JSON keep the name `key`.
+    #[sqlx(rename = "field_key")]
+    #[serde(rename = "key")]
     pub key:           String,
     pub label:         String,
     pub field_type:    String,
     /// Only meaningful for `field_type == "dropdown"`: a JSON array of the
-    /// allowed option strings.
+    /// allowed option strings. Stored as JSON/JSONB on PostgreSQL and MySQL and
+    /// as TEXT on SQLite; `#[sqlx(json)]` decodes all three uniformly.
+    #[sqlx(json)]
     pub options:       Option<Value>,
     pub position:      i32,
     pub visibility:    String,
