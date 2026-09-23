@@ -32,6 +32,10 @@ number at release time, and CI publishes that section as the GitHub Release note
 
 ### Security
 
+- **Security fixes from the shared database layer (kubuno-db 0.9.0).** The
+  database password can no longer appear in a log through the debug output of
+  the database settings.
+
 - **Duplicate-report protection preserved on every engine.** The "one open
   report per member per post" guard, previously a PostgreSQL partial unique
   index (which MySQL cannot express), is now enforced in the service before the
