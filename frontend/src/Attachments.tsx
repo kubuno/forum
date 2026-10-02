@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { Paperclip, X, FileText, Download } from 'lucide-react'
 import { useFilesDialogStore, filesApi, getFileIcon } from '@kubuno/drive'
+import { useSignedUrl, downloadSignedUrl } from '@kubuno/sdk'
 import { forumApi } from './api'
 import { formatBytes } from './helpers'
 
@@ -52,6 +53,17 @@ export async function saveAttachments(postId: string, pending: PendingAttachment
 }
 
 /** Read-only attachment list shown under a post. */
+/** Image attachment: signed thumbnail, click downloads the original. */
+function ImageAttachment({ fileId, filename }: { fileId: string; filename: string }) {
+  const thumb = useSignedUrl(filesApi.thumbnailUrl(fileId))
+  return (
+    <a href={filesApi.downloadUrl(fileId)} onClick={e => { e.preventDefault(); void downloadSignedUrl(filesApi.downloadUrl(fileId), filename) }} title={filename}>
+      {thumb && <img src={thumb} alt={filename}
+        className="w-24 h-24 object-cover rounded-lg border border-border hover:opacity-90" loading="lazy" />}
+    </a>
+  )
+}
+
 export function PostAttachments({ postId }: { postId: string }) {
   const { t } = useTranslation('forum')
   const { data: attachments = [] } = useQuery({
@@ -65,12 +77,9 @@ export function PostAttachments({ postId }: { postId: string }) {
       <div className="text-[11px] font-semibold uppercase tracking-wide text-text-tertiary mb-2">{t('attachments')}</div>
       <div className="flex flex-wrap gap-2">
         {attachments.map(a => a.file_id && isImage(a.mime_type) ? (
-          <a key={a.id} href={filesApi.downloadUrl(a.file_id)} target="_blank" rel="noopener noreferrer" title={a.filename}>
-            <img src={filesApi.thumbnailUrl(a.file_id)} alt={a.filename}
-              className="w-24 h-24 object-cover rounded-lg border border-border hover:opacity-90" loading="lazy" />
-          </a>
+          <ImageAttachment key={a.id} fileId={a.file_id} filename={a.filename} />
         ) : (
-          <a key={a.id} href={a.file_id ? filesApi.downloadUrl(a.file_id) : '#'} target="_blank" rel="noopener noreferrer"
+          <a key={a.id} href={a.file_id ? filesApi.downloadUrl(a.file_id) : '#'} onClick={e => { e.preventDefault(); if (a.file_id) void downloadSignedUrl(filesApi.downloadUrl(a.file_id), a.filename) }}
             className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-border hover:bg-surface-1 text-sm">
             <span className="text-text-tertiary">{getFileIcon(a.mime_type ?? '', a.filename)}</span>
             <span className="max-w-[180px] truncate text-text-primary">{a.filename}</span>

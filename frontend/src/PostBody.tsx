@@ -2,6 +2,15 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
 import './code-highlight.css'
+import { useSignedUrl } from '@kubuno/sdk'
+import type { ImgHTMLAttributes } from 'react'
+
+/** Markdown image: Drive URLs are persisted bare and signed at render time. */
+function SignedMdImg({ src, ...props }: ImgHTMLAttributes<HTMLImageElement>) {
+  const signed = useSignedUrl(typeof src === 'string' ? src : undefined)
+  if (!signed) return null
+  return <img {...props} src={signed} className="max-w-full max-h-96 rounded-lg my-2" loading="lazy" />
+}
 
 // Allow only safe URL schemes on links and images. Anything else — javascript:,
 // data:, vbscript:, … — is dropped, so a crafted `[x](javascript:…)` or
@@ -45,7 +54,7 @@ export default function PostBody({ body, signature }: { body: string; signature?
         urlTransform={safeUrl}
         components={{
           a: ({ ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" className="text-primary underline" />,
-          img: ({ ...props }) => <img {...props} className="max-w-full max-h-96 rounded-lg my-2" loading="lazy" />,
+          img: ({ node: _node, ...props }) => <SignedMdImg {...props} />,
           code: ({ className, ...props }) => {
             // Fenced code blocks are tagged `hljs` (plus `language-xxx` when
             // detected) by rehype-highlight — keep those classes so
