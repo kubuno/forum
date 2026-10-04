@@ -1,0 +1,15 @@
+[
+  {
+    "Name": "Forum (Kubuno Core + browser)",
+    "Projects": [
+      {
+        "Path": "Kubuno.Forum.Server.rsproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "frontend\\Kubuno.Forum.Web.esproj",
+        "Action": "Start"
+      }
+    ]
+  }
+]
