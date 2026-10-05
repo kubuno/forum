@@ -175,6 +175,7 @@ async fn main() -> Result<()> {
             "./migrations/postgres",
             "./migrations/mysql",
             "./migrations/sqlite",
+            oracle_mysql = "./migrations/mysql-oracle",
         )
         .run(&pool, SCHEMA)
         .await
