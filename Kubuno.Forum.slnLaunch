@@ -3,11 +3,11 @@
     "Name": "Forum (Kubuno Core + browser)",
     "Projects": [
       {
-        "Path": "Kubuno.Forum.Server.rsproj",
+        "Path": "server\\Kubuno.Forum.Server.rsproj",
         "Action": "Start"
       },
       {
-        "Path": "frontend\\Kubuno.Forum.Web.esproj",
+        "Path": "web\\Kubuno.Forum.Web.esproj",
         "Action": "Start"
       }
     ]

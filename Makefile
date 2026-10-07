@@ -1,27 +1,30 @@
-.PHONY: build build-front dev deb install check fmt clean
+.PHONY: build build-front dev kbpkg install check fmt clean
 
-build:        ## Compile the module binary
-	cargo build --release --bin kubuno-forum
+# Repository layout (README "Architecture"): server/ the Rust server, web/ the web frontend,
+# mobile/ the mobile apps.
+
+build:        ## Build the module's server binary
+	cd server && cargo build --release --bin kubuno-forum
 
 build-front:  ## Build the frontend bundle (dist/entry.js)
-	cd frontend && npm run build
+	cd web && npm run build
 
-dev:          ## Run the module in watch mode
-	cargo watch -q -c -x 'run --bin kubuno-forum'
+dev:          ## Run the server in watch mode
+	cd server && cargo watch -q -c -x 'run --bin kubuno-forum'
 
-deb:          ## Build the Debian package
-	bash build_deb.sh
+kbpkg:        ## Build the Kubuno package (.kbpkg)
+	bash build_kbpkg.sh
 
-install:      ## Build and install the package
-	bash build_deb.sh --install
+install:      ## Build and install the package into the local core
+	bash build_kbpkg.sh --install
 
 check:        ## cargo check + frontend typecheck
-	cargo check --bin kubuno-forum
-	cd frontend && npm run typecheck
+	cd server && cargo check --bin kubuno-forum
+	cd web && npm run typecheck
 
 fmt:          ## Format the code
-	cargo fmt
+	cd server && cargo fmt
 
-clean:        ## Clean build artifacts
-	cargo clean
-	rm -rf frontend/dist dist
+clean:        ## Remove build outputs
+	cd server && cargo clean
+	rm -rf web/dist dist
