@@ -17,7 +17,7 @@ const KIND_LABEL: Record<string, string> = {
  * Catch-up sync into the shared header bell.
  *
  * The forum has no bell of its own any more (see the orphaned
- * `NotificationsBell.tsx`) — everything the user needs to see lives in the
+ * `NotificationsBell.tsx`) - everything the user needs to see lives in the
  * core's `useNotificationStore`. A real-time bridge already exists on the
  * core side (`useModuleNotifications`): the forum backend posts a `Custom`
  * WS event for every notification it creates, and that bridge turns it into
@@ -27,7 +27,7 @@ const KIND_LABEL: Record<string, string> = {
  * That bridge only fires while the browser is actually connected. This hook
  * covers what it misses: notifications created while the user was offline.
  * On mount, it reads the unread rows once and announces each one under the
- * SAME `forum:<id>` key — `pushKeyed` silently no-ops on a key already
+ * SAME `forum:<id>` key - `pushKeyed` silently no-ops on a key already
  * announced, so anything the live bridge already delivered is never
  * duplicated, and remounting this hook (e.g. leaving and coming back to
  * /forum) never re-announces the same rows either.
@@ -36,7 +36,7 @@ export function useForumNotificationSync(): void {
   const { t } = useTranslation('forum')
   const [unread, setUnread] = useState<ForumNotification[]>([])
 
-  // Keeps the shared user cache warm for the resolved actors — other forum
+  // Keeps the shared user cache warm for the resolved actors - other forum
   // UI (member lists, post authors…) then reuses it instead of refetching.
   useResolveUsers(unread.map(n => n.actor_id).filter(Boolean) as string[])
 

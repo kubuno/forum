@@ -12,7 +12,7 @@ use crate::{
     state::AppState,
 };
 
-/// POST /topics/:id/bookmark — toggles a bookmark.
+/// POST /topics/:id/bookmark - toggles a bookmark.
 pub async fn toggle(
     State(state): State<AppState>,
     Extension(user): Extension<ForumUser>,
@@ -24,7 +24,7 @@ pub async fn toggle(
     Ok(Json(json!({ "bookmarked": bookmarked })))
 }
 
-/// GET /me/bookmarks — the user's bookmarked topics.
+/// GET /me/bookmarks - the user's bookmarked topics.
 pub async fn list(
     State(state): State<AppState>,
     Extension(user): Extension<ForumUser>,

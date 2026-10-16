@@ -12,7 +12,7 @@
 //! matching query word, keeping the `\x01`/`\x02` highlight markers the
 //! frontend expects.
 //!
-//! Reservation: `pg_trgm`'s typo tolerance is gone — a `LIKE '%stem%'` needs the
+//! Reservation: `pg_trgm`'s typo tolerance is gone - a `LIKE '%stem%'` needs the
 //! stem to appear as a substring. Stemming still folds inflections and the
 //! normalizer folds accents, so inflected and accented queries still match.
 
@@ -103,7 +103,7 @@ impl SearchSort {
 }
 
 /// Advanced filters layered on top of the free-text query. Every field is
-/// optional and defaults to "no restriction" — the plain search bar leaves
+/// optional and defaults to "no restriction" - the plain search bar leaves
 /// this at `SearchFilters::default()`, and the advanced panel narrows it.
 #[derive(Debug, Default, Clone)]
 pub struct SearchFilters {

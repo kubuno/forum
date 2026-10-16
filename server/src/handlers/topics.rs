@@ -151,8 +151,8 @@ async fn assert_topic_moderator(topic_id: Uuid, user: &ForumUser, state: &AppSta
 }
 
 /// The caller must moderate this specific forum. Used to guard the *other* side
-/// of a move/split/merge — the forum a topic lands in, or the one a merge empties
-/// — which the source-topic check alone never covers (SEC-05).
+/// of a move/split/merge - the forum a topic lands in, or the one a merge empties
+/// - which the source-topic check alone never covers (SEC-05).
 async fn assert_forum_moderator(forum_id: Uuid, user: &ForumUser, state: &AppState) -> Result<()> {
     let perms = PermissionService::effective(forum_id, user, &state.db).await?;
     if perms.is_admin || perms.is_moderator { Ok(()) } else { Err(ForumError::Forbidden) }
@@ -188,7 +188,7 @@ pub async fn move_topic(
 ) -> Result<Json<Value>> {
     assert_topic_moderator(id, &user, &state).await?;
     // The destination forum must exist and be one the caller also moderates,
-    // otherwise a moderator of forum A could banish a topic into forum B — or a
+    // otherwise a moderator of forum A could banish a topic into forum B - or a
     // forum id that does not exist at all (SEC-05).
     ForumService::get(dto.forum_id, &state.db).await?;
     assert_forum_moderator(dto.forum_id, &user, &state).await?;
@@ -270,7 +270,7 @@ pub async fn mark_read(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// GET /topics/:id/read-state — this user's own read marker for the topic
+/// GET /topics/:id/read-state - this user's own read marker for the topic
 /// (`read_at`, or `null` if never marked read), so the topic view can compute
 /// its "jump to first unread post" affordance without exposing anyone else's
 /// reading history.

@@ -14,7 +14,7 @@ interface Props {
 
 /** Lists the past versions of a post's body, most recent edit first, plus the
  *  message as it reads now. Only ever opened for a post whose `edit_count` is
- *  positive, and only reachable by its author or a moderator — the backend
+ *  positive, and only reachable by its author or a moderator - the backend
  *  enforces the same rule regardless. */
 export default function PostRevisionsWindow({ post, onClose }: Props) {
   const { t } = useTranslation('forum')

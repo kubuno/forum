@@ -16,8 +16,8 @@ pub struct PostService;
 impl PostService {
     /// Messages of a topic, as this viewer may see them.
     ///
-    /// A message waiting for approval is shown to its own author — otherwise
-    /// people re-post, thinking the forum swallowed what they wrote — and to
+    /// A message waiting for approval is shown to its own author - otherwise
+    /// people re-post, thinking the forum swallowed what they wrote - and to
     /// moderators, who have to be able to read what they are deciding on.
     /// Everyone else sees the topic without it.
     pub async fn list_by_topic(
@@ -167,7 +167,7 @@ impl PostService {
 
         // Edit window: an author may correct themselves for a while, not rewrite
         // history a month later under a reply that answered the old text.
-        // Moderators are never bound by it — that is what makes them moderators.
+        // Moderators are never bound by it - that is what makes them moderators.
         if !is_mod && cfg.post_edit_window_minutes > 0 {
             let age = (chrono::Utc::now() - post.created_at).num_minutes();
             if age > cfg.post_edit_window_minutes {

@@ -1,12 +1,12 @@
-//! In-memory cache of every currently active ban — by account, IP address,
-//! and email — mirroring the pattern of `censor_service`'s
+//! In-memory cache of every currently active ban - by account, IP address,
+//! and email - mirroring the pattern of `censor_service`'s
 //! `LazyLock<RwLock<...>>`: cheap enough to consult on every request, rebuilt
 //! from the database whenever an admin bans/unbans someone (`reload`, called
 //! after every write) and once at boot (see `main.rs`).
 //!
-//! Matching an IP or an email is always an *exact* string comparison — no
+//! Matching an IP or an email is always an *exact* string comparison - no
 //! CIDR, no wildcard, no case-folding beyond the lowercase normalization
-//! already applied to emails before they are stored — kept that simple on
+//! already applied to emails before they are stored - kept that simple on
 //! purpose so the rule stays easy to audit and cannot silently over-match.
 
 use std::collections::HashSet;
@@ -25,7 +25,7 @@ struct BanSets {
     emails: HashSet<String>,
 }
 
-/// Empty until the first successful reload — every `is_*_banned` call is then
+/// Empty until the first successful reload - every `is_*_banned` call is then
 /// a no-op (nobody banned) rather than a panic.
 static BANS: LazyLock<RwLock<BanSets>> = LazyLock::new(|| RwLock::new(BanSets::default()));
 
@@ -34,7 +34,7 @@ pub struct BanRegistry;
 impl BanRegistry {
     /// Recompiles the in-memory cache from `forum.user_bans`, `forum.ip_bans`
     /// and `forum.email_bans`, keeping only bans that have not expired. Never
-    /// blocks the boot sequence or a mutation — a failed reload is logged and
+    /// blocks the boot sequence or a mutation - a failed reload is logged and
     /// the previous cache (possibly empty) is left in place.
     pub async fn reload(db: &DbPool) -> Result<()> {
         let now = chrono::Utc::now();

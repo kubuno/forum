@@ -96,7 +96,7 @@ pub async fn delete(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// PATCH /forums/reorder — admin only. Sets `position = index` for each forum
+/// PATCH /forums/reorder - admin only. Sets `position = index` for each forum
 /// id in the given order, in one transaction (SEC: multi-row writes stay
 /// atomic). Meant to be called with the ids of a single category's forums, so
 /// only that category's ordering changes.
@@ -131,7 +131,7 @@ pub async fn read_state(
     Ok(Json(json!({ "read_state": markers })))
 }
 
-/// POST /forums/:id/read-all — marks every visible, non-deleted topic of this
+/// POST /forums/:id/read-all - marks every visible, non-deleted topic of this
 /// forum as read for the caller, up to its latest message.
 pub async fn read_all(
     State(state): State<AppState>,

@@ -2,7 +2,7 @@
 // server-side.
 //
 // Every word/phrase here is substituted server-side, at render time, in every
-// post body (`CensorService`, see `handlers/posts.rs::list`) — the admin's
+// post body (`CensorService`, see `handlers/posts.rs::list`) - the admin's
 // list is never sent to the client to filter locally, so there is nothing
 // for a member to bypass by inspecting the response.
 
@@ -52,7 +52,7 @@ export function CensoredWordsSection() {
       </div>
       <p className="text-xs text-text-tertiary mb-2">
         {t('censored_words_desc', {
-          defaultValue: "Chaque mot est remplacé automatiquement dans les messages, côté serveur — insensible à la casse, sur un mot entier.",
+          defaultValue: "Chaque mot est remplacé automatiquement dans les messages, côté serveur - insensible à la casse, sur un mot entier.",
         })}
       </p>
       <ul className="rounded-xl border border-border bg-surface-0 divide-y divide-border">

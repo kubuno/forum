@@ -184,7 +184,7 @@ impl ModerationService {
         details: Option<&str>,
         db: &DbPool,
     ) {
-        // mod_log.id is a BIGINT autoincrement — no minted uuid here.
+        // mod_log.id is a BIGINT autoincrement - no minted uuid here.
         if let Err(e) = db
             .execute(
                 "INSERT INTO forum.mod_log (moderator_id, action, forum_id, topic_id, post_id, target_user_id, details) \
@@ -308,7 +308,7 @@ impl ModerationService {
     }
 
     /// Returns true if the user is currently banned, read from the in-memory
-    /// `BanRegistry` — no database round trip.
+    /// `BanRegistry` - no database round trip.
     pub async fn is_banned(user_id: Uuid, _db: &DbPool) -> Result<bool> {
         Ok(BanRegistry::is_user_banned(user_id))
     }

@@ -19,7 +19,7 @@ pub struct ForumUser {
     /// Core user-group ids the caller belongs to, resolved at authentication
     /// (see `services::directory::user_group_ids`). Drives the ADDITIVE
     /// per-group forum permissions; empty when the caller is in no group or the
-    /// core could not be reached (fail-closed — never widens access spuriously).
+    /// core could not be reached (fail-closed - never widens access spuriously).
     pub group_ids: Vec<Uuid>,
 }
 
@@ -34,13 +34,13 @@ impl ForumUser {
 pub type ForumUserExt = axum::Extension<ForumUser>;
 
 /// Middleware: extracts X-Kubuno-User-Id, X-Kubuno-User-Role, X-Kubuno-User-Email.
-/// These headers are injected by the core proxy — they are trusted.
+/// These headers are injected by the core proxy - they are trusted.
 /// This module's id, used as the token audience.
 const MODULE_ID: &str = "forum";
 
 /// Authenticate the caller from the signed `X-Kubuno-Auth` token the core
 /// mints with this module's internal secret (see `kubuno-modauth`), instead of
-/// trusting the plain `X-Kubuno-User-*` headers — which any process reaching this
+/// trusting the plain `X-Kubuno-User-*` headers - which any process reaching this
 /// module's loopback port could forge to impersonate any user.
 pub async fn require_auth(
     State(state): State<AppState>,
@@ -70,17 +70,17 @@ pub async fn require_auth(
 }
 
 /// Header the core injects with the caller's real IP, hardened against
-/// spoofing on its side (`crate::auth::client_ip` in the core) — see
+/// spoofing on its side (`crate::auth::client_ip` in the core) - see
 /// `kubuno_core::modules::proxy`. Absent for a module→module call.
 const CLIENT_IP_HEADER: &str = "x-kubuno-client-ip";
 
 /// Rejects a request from someone currently banned by account, IP, or email
-/// (block lists — see `services::ban_registry`). Must run
+/// (block lists - see `services::ban_registry`). Must run
 /// *after* `require_auth` (see `router::build`), so `ForumUser` is already in
 /// the request extensions; consults only the in-memory `BanRegistry`, never
 /// the database, so it costs nothing on the hot path.
 ///
-/// An administrator is never blocked here — a ban set by mistake on an admin
+/// An administrator is never blocked here - a ban set by mistake on an admin
 /// account must not lock them out with no way back short of a database edit,
 /// mirroring `ModerationService::ban` refusing to let a moderator ban
 /// themselves.

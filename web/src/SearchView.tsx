@@ -19,7 +19,7 @@ type SearchSort = 'relevance' | 'recent'
 
 /**
  * The one and only piece of state behind both the plain search bar and the
- * advanced panel — see the module-wide rule that they must never diverge.
+ * advanced panel - see the module-wide rule that they must never diverge.
  * The bar only ever touches `q`; the panel only ever touches the rest. Both
  * read from and write into this same object, so a filter set in the panel is
  * immediately what the bar's next search runs with, and vice versa.
@@ -52,7 +52,7 @@ export default function SearchView() {
   const query = search.q.trim()
   const forumIdsKey = search.forumIds.join(',')
 
-  // Any change to the shared query — from either the bar or the panel —
+  // Any change to the shared query - from either the bar or the panel -
   // starts back at the first page.
   useEffect(() => { setPage(1) }, [query, search.authorId, forumIdsKey, search.scope, search.sort, search.days])
 
@@ -363,7 +363,7 @@ function AuthorFilterField({
   )
 }
 
-/** Forum multi-select for the advanced panel — a plain checkbox list, since
+/** Forum multi-select for the advanced panel - a plain checkbox list, since
  *  forum counts on a self-hosted instance stay small enough that a filter
  *  field would be more friction than it saves. */
 function ForumFilterList({

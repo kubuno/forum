@@ -10,8 +10,8 @@ import { AuthorName, AuthorAvatar } from './Author'
 import { timeAgo, shortDateTime } from './helpers'
 import PostBody from './PostBody'
 
-// A custom profile field's value is ALWAYS plain, escaped text — never
-// Markdown/HTML, unlike the bio above — so a member's own answer can never
+// A custom profile field's value is ALWAYS plain, escaped text - never
+// Markdown/HTML, unlike the bio above - so a member's own answer can never
 // inject anything into another member's view of it. `url` is the one type
 // that becomes a link, and only when it is actually http(s): this mirrors
 // `PostBody.tsx`'s `safeUrl` allow-list (restricted further here, since a
@@ -76,7 +76,7 @@ function ProfileFieldEditor({ field, value, onChange }: { field: ProfileField; v
           <label className="block text-xs font-medium text-text-secondary mb-1">{label}</label>
           <Dropdown
             options={[
-              { value: '', label: t('profile_field_none', { defaultValue: '—' }) },
+              { value: '', label: t('profile_field_none', { defaultValue: '-' }) },
               ...(field.options ?? []).map(o => ({ value: o, label: o })),
             ]}
             value={value}
@@ -93,7 +93,7 @@ function ProfileFieldEditor({ field, value, onChange }: { field: ProfileField; v
   }
 }
 
-/** In-place editor for the CALLER's own answers (never someone else's) — no
+/** In-place editor for the CALLER's own answers (never someone else's) - no
  *  separate "edit mode": the widgets themselves are the editor, pre-filled
  *  with whatever is already saved, like the rest of this admin/profile UI. */
 function MyProfileFieldsEditor() {

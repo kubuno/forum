@@ -38,7 +38,7 @@ pub async fn set(
     Ok(Json(json!({ "permission": permission })))
 }
 
-/// GET /groups — the instance's user groups (id + name), so the admin panel can
+/// GET /groups - the instance's user groups (id + name), so the admin panel can
 /// offer them when granting per-group forum access. Admin only.
 pub async fn list_groups(
     State(state): State<AppState>,
@@ -49,7 +49,7 @@ pub async fn list_groups(
     Ok(Json(json!({ "groups": groups })))
 }
 
-/// GET /forums/:id/group-permissions — the per-group grants on a forum.
+/// GET /forums/:id/group-permissions - the per-group grants on a forum.
 pub async fn list_group(
     State(state): State<AppState>,
     Extension(user): Extension<ForumUser>,
@@ -60,7 +60,7 @@ pub async fn list_group(
     Ok(Json(json!({ "permissions": permissions })))
 }
 
-/// PUT /forums/:id/group-permissions — upsert (or clear) one group's grant.
+/// PUT /forums/:id/group-permissions - upsert (or clear) one group's grant.
 pub async fn set_group(
     State(state): State<AppState>,
     Extension(user): Extension<ForumUser>,

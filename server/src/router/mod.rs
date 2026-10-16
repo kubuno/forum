@@ -90,7 +90,7 @@ pub fn build(state: AppState) -> Router {
         .route("/mod/topics/bulk", post(moderation::bulk_topics))
         .route("/mod/log",     get(moderation::mod_log))
         .route("/mod/bans",    get(moderation::list_bans))
-        // IP / email bans (exact match, admin only) — enforced by
+        // IP / email bans (exact match, admin only) - enforced by
         // `middleware::enforce_ban`, layered below.
         .route("/bans/ip",        get(moderation::list_ip_bans).post(moderation::ban_ip))
         .route("/bans/ip/:id",    delete(moderation::unban_ip))
@@ -128,7 +128,7 @@ pub fn build(state: AppState) -> Router {
         .route("/me/drafts/:id",    delete(drafts::delete))
         .route("/me/notifications", get(notifications::list))
         .route("/me/notifications/read", post(notifications::mark_read))
-        // Ignore list — distinct from `/me/pm/blocks`,
+        // Ignore list - distinct from `/me/pm/blocks`,
         // which mutes PMs; this one only affects the topic view's display.
         .route("/me/ignored",     get(ignore::list).post(ignore::add))
         .route("/me/ignored/:uid", delete(ignore::remove))
@@ -150,7 +150,7 @@ pub fn build(state: AppState) -> Router {
         // Layer order matters: axum runs the LAST `.layer()` call FIRST (it is the
         // outermost). `require_auth` must stay outermost (it populates `ForumUser`),
         // `enforce_ban` runs right after it (it reads `ForumUser` + the client-IP
-        // header to reject a banned account/IP/email — SEC), and the write rate
+        // header to reject a banned account/IP/email - SEC), and the write rate
         // limiter sits innermost, closest to the handlers (SEC-09). Execution order
         // is therefore: require_auth → enforce_ban → rate_limit_writes → handler.
         .layer(middleware::from_fn_with_state(state.clone(), rate_limit_writes))

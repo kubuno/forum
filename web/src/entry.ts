@@ -1,4 +1,4 @@
-/** Forum module bundle — loaded at runtime (cf. vite.config). */
+/** Forum module bundle - loaded at runtime (cf. vite.config). */
 import { lazy } from 'react'
 import {
   RouteRegistry, WaffleAppRegistry, FaviconRegistry,

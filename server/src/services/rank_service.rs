@@ -160,12 +160,12 @@ impl RankService {
         .map_err(Into::into)
     }
 
-    /// Assigns (or clears, with `rank_id = None`) a user's SPECIAL rank —
+    /// Assigns (or clears, with `rank_id = None`) a user's SPECIAL rank -
     /// admin only, enforced by the handler. Only a rank flagged `is_special`
     /// may be assigned this way: the non-special ranks are earned
     /// automatically from post count in `bump_post_count` and stay off-limits
     /// here to keep that ladder meaningful. Clearing never touches the
-    /// automatic rank — the next post simply reassigns it, same as today when
+    /// automatic rank - the next post simply reassigns it, same as today when
     /// `rank_id` is null.
     pub async fn assign_special(user_id: Uuid, rank_id: Option<Uuid>, db: &DbPool) -> Result<UserProfile> {
         if let Some(rid) = rank_id {
@@ -224,7 +224,7 @@ impl RankService {
     }
 
     /// Bump a user's topic counter (called when they open a new topic). The row
-    /// is ensured to exist first, then the delta is applied floored at zero — a
+    /// is ensured to exist first, then the delta is applied floored at zero - a
     /// portable read-modify-write instead of PostgreSQL's `GREATEST` upsert.
     pub async fn bump_topic_count(tx: &mut DbTx, user_id: Uuid, delta: i32) -> Result<()> {
         let b = tx.backend();

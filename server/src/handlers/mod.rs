@@ -37,7 +37,7 @@ use crate::{
 /// The DTOs carry a compile-time `#[validate(length(max = 100000))]` ceiling,
 /// which is a sanity bound on the wire format; this is the ADMINISTRATOR's
 /// ceiling, which is a policy and can be lowered from the console. Both apply,
-/// and the stricter one wins — as it should.
+/// and the stricter one wins - as it should.
 pub fn assert_body_within_limit(body: &str, cfg: &InstanceConfig) -> Result<()> {
     if body.chars().count() > cfg.max_post_length {
         return Err(ForumError::Validation(format!(
@@ -51,7 +51,7 @@ pub fn assert_body_within_limit(body: &str, cfg: &InstanceConfig) -> Result<()> 
 /// Whether a contribution by this author is published immediately or held in
 /// the approval queue.
 ///
-/// The author's post count is only fetched when the queue is actually armed —
+/// The author's post count is only fetched when the queue is actually armed -
 /// on the overwhelming majority of instances, where nothing is moderated, this
 /// costs no query at all.
 pub async fn approval_decision(

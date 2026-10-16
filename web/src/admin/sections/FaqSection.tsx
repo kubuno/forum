@@ -5,7 +5,7 @@
 // (`FaqPage.tsx`), rendered through the same sanitized Markdown renderer as
 // post bodies. Editing happens IN PLACE, like the other sections on this
 // page: adding opens an inline form row, editing swaps a row's display for
-// the same form pre-filled — never a modal.
+// the same form pre-filled - never a modal.
 
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'

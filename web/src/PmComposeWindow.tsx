@@ -11,7 +11,7 @@ interface Props {
 }
 
 /** Compose a brand-new private conversation: pick recipients, optional
- *  subject, and a Markdown body — mirrors NewTopicWindow's shape. */
+ *  subject, and a Markdown body - mirrors NewTopicWindow's shape. */
 export default function PmComposeWindow({ onClose }: Props) {
   const { t } = useTranslation('forum')
   const navigate = useNavigate()

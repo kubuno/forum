@@ -1,10 +1,10 @@
 //! Ignore list: see migration `000015`.
 //!
 //! SECURITY: purely a display preference for the caller's own client. A
-//! member manages ONLY their own list — every method here is keyed off the
+//! member manages ONLY their own list - every method here is keyed off the
 //! `user_id` extracted from the authenticated session, never a path/body
 //! parameter standing in for "which user's list". Ignoring someone never
-//! changes what the backend returns from post/topic listing endpoints — the
+//! changes what the backend returns from post/topic listing endpoints - the
 //! frontend is the one folding an ignored author's messages, and the user
 //! can always reveal them again.
 
@@ -16,7 +16,7 @@ use crate::errors::{ForumError, Result};
 pub struct IgnoreService;
 
 impl IgnoreService {
-    /// `GET /me/ignored` — ids the caller has ignored, most recent first.
+    /// `GET /me/ignored` - ids the caller has ignored, most recent first.
     pub async fn list(user_id: Uuid, db: &DbPool) -> Result<Vec<Uuid>> {
         let rows: Vec<Uuid> = db
             .fetch_all_as::<(Uuid,)>(
@@ -31,7 +31,7 @@ impl IgnoreService {
         Ok(rows)
     }
 
-    /// `POST /me/ignored` — idempotent. Refuses ignoring oneself.
+    /// `POST /me/ignored` - idempotent. Refuses ignoring oneself.
     pub async fn add(user_id: Uuid, target: Uuid, db: &DbPool) -> Result<()> {
         if target == user_id {
             return Err(ForumError::Validation("impossible de s'ignorer soi-même".into()));

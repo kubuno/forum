@@ -42,12 +42,12 @@ publishes = [
 ]
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  Forum — admin panel pages
+#  Forum - admin panel pages
 # ══════════════════════════════════════════════════════════════════════════════
 # Each becomes an entry of the admin menu (Modules → Forum), at its own address
 # (/admin/modules/forum/<id>). These pages manage OBJECTS (categories, forums,
 # ranks) rather than scalar settings, so their content is contributed as custom
-# sections through ModuleAdminRegistry — there are no [[settings]] here.
+# sections through ModuleAdminRegistry - there are no [[settings]] here.
 
 [[setting_groups]]
 id          = "structure"
@@ -66,7 +66,7 @@ description  = "Les rangs attribués aux membres selon leur activité."
 # ── Publication ───────────────────────────────────────────────────────────────
 # Contrairement aux deux pages ci-dessus, celles qui suivent sont des réglages
 # scalaires : le core en rend le formulaire à partir du schéma. Chaque clé est
-# lue par du code qui agit — voir src/config/instance.rs.
+# lue par du code qui agit - voir src/config/instance.rs.
 
 [[setting_groups]]
 id          = "posting"

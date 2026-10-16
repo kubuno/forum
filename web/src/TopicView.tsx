@@ -59,7 +59,7 @@ export default function TopicView() {
   const [page, setPage] = useState(1)
   const [flashedId, setFlashedId] = useState<string | null>(null)
   // Ids of ignored-author messages the reader chose to reveal anyway, for
-  // this visit of the topic — reset whenever the topic itself changes.
+  // this visit of the topic - reset whenever the topic itself changes.
   const [revealedIds, setRevealedIds] = useState<Set<string>>(new Set())
   const replyRef = useRef<HTMLDivElement>(null)
   const draftIdRef = useRef<string | null>(null)
@@ -74,7 +74,7 @@ export default function TopicView() {
   useEffect(() => { if (!reply.trim() && mentions.length) setMentions([]) }, [reply]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Autosave the reply draft: once it holds more than a trivial amount of
-  // text, persist it in the background every 3s. Best-effort only — never
+  // text, persist it in the background every 3s. Best-effort only - never
   // let a failed save interrupt typing.
   useEffect(() => {
     if (draftTimerRef.current) clearTimeout(draftTimerRef.current)
@@ -130,7 +130,7 @@ export default function TopicView() {
   const isBookmarked = bookmarks.some(b => b.id === topicId)
 
   // Ignore list: a display-only fold, not a moderation
-  // action — the backend keeps returning every post regardless.
+  // action - the backend keeps returning every post regardless.
   const { data: ignoredIds = [] } = useQuery({
     queryKey: ['forum-ignored'],
     queryFn: forumApi.listIgnored,
@@ -141,7 +141,7 @@ export default function TopicView() {
   const { data: allForums = [] } = useQuery({ queryKey: ['forum-all-forums'], queryFn: () => forumApi.listForums() })
   const { data: categories = [] } = useQuery({ queryKey: ['forum-categories'], queryFn: forumApi.listCategories })
 
-  // The read marker as it stood BEFORE this visit — frozen for the whole
+  // The read marker as it stood BEFORE this visit - frozen for the whole
   // visit (staleTime: Infinity, keyed by topicId) so the "mark read" call
   // just below, which moves it forward, never overwrites the boundary this
   // page uses to compute its "first unread post" affordance.
@@ -152,7 +152,7 @@ export default function TopicView() {
     staleTime: Infinity,
   })
 
-  // Mark the topic read up to the latest post once posts are loaded — held
+  // Mark the topic read up to the latest post once posts are loaded - held
   // back until the read marker above has been captured, so that request never
   // races ahead of it (SEC/consistency: same origin, sequenced client-side).
   useEffect(() => {
@@ -164,7 +164,7 @@ export default function TopicView() {
     }
   }, [posts, topicId, qc, readAtFetched])
 
-  // First post on the current page created after the pre-visit read marker —
+  // First post on the current page created after the pre-visit read marker -
   // `null` once every loaded post has already been read (or before the read
   // marker itself is known). A `readAt` of `null` means the topic was never
   // marked read before, so every loaded post counts as unread.
@@ -241,7 +241,7 @@ export default function TopicView() {
     setPosting(true)
     try {
       const body = reply.trim()
-      // Only mentions whose "@label" is still typed in the body are sent —
+      // Only mentions whose "@label" is still typed in the body are sent -
       // this drops picks the author deleted or overwrote by hand.
       const mention_user_ids = resolveMentionIds(body, mentions)
       const post = await forumApi.createPost(topicId, { body_md: body, ...(mention_user_ids.length ? { mention_user_ids } : {}) })

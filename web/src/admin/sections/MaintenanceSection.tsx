@@ -3,7 +3,7 @@
 //
 // Soft-deletes every ordinary, non-pinned, non-solved, poll-less topic of a
 // forum whose last activity is older than N days. The preview (`dry_run: true`)
-// never writes anything — it only counts — so the admin sees the impact before
+// never writes anything - it only counts - so the admin sees the impact before
 // committing, and the actual purge still runs through `useConfirm` (never the
 // browser's `confirm()`).
 

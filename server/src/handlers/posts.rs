@@ -35,7 +35,7 @@ pub async fn list(
     let mut posts = PostService::list_by_topic(topic_id, user.id, is_mod, limit, offset, &state.db).await?;
     let total = PostService::count_by_topic(topic_id, user.id, is_mod, &state.db).await?;
     // Word censor (server-side): substituted here so the response
-    // body never carries the raw word — a client-side filter would be trivial
+    // body never carries the raw word - a client-side filter would be trivial
     // to bypass by reading the payload directly.
     for post in &mut posts {
         post.body_md = CensorService::apply(&post.body_md);
@@ -80,7 +80,7 @@ pub async fn create(
         publisher::publish_post_created(&state, post.id, user.id).await;
 
         // Whether the forum is open to ordinary members. When it is restricted,
-        // only its moderators may be notified about it — the same visibility gate
+        // only its moderators may be notified about it - the same visibility gate
         // mentions use, so no notification ever reveals a topic to someone who
         // cannot reach it (SEC-11).
         let forum_open = PermissionService::role_can_view(topic.forum_id, "user", &state.db)
@@ -138,12 +138,12 @@ pub async fn get(
     Path(id): Path<Uuid>,
 ) -> Result<Json<Value>> {
     let post = PostService::get(id, &state.db).await?;
-    // First, the caller must be able to see the forum at all — a direct link to a
+    // First, the caller must be able to see the forum at all - a direct link to a
     // post id must not bypass forum visibility.
     let perms = PermissionService::assert_can_view(post.forum_id, &user, &state.db).await?;
     let is_mod = perms.is_admin || perms.is_moderator;
     // Same rule as the listing: a message waiting for approval or removed by
-    // moderation is readable only by its author and by moderators — including
+    // moderation is readable only by its author and by moderators - including
     // through a direct link to its id (SEC-02).
     if (!post.is_approved || post.is_deleted) && post.author_id != user.id && !is_mod {
         return Err(ForumError::NotFound(format!("Post {id}")));
@@ -152,7 +152,7 @@ pub async fn get(
 }
 
 /// Edit history of a post: visible only to its author and to moderators, for
-/// the same reason a pending/removed post is (SEC-02) — a direct link to a
+/// the same reason a pending/removed post is (SEC-02) - a direct link to a
 /// post id must not leak more than the post itself would show.
 pub async fn list_revisions(
     State(state): State<AppState>,

@@ -6,7 +6,7 @@ use validator::Validate;
 /// One question/answer pair of the editable FAQ: admin-curated,
 /// shown to every member on a dedicated page. `answer_md` is Markdown,
 /// rendered client-side with the same sanitized renderer as post bodies
-/// (`PostBody`) — never on the server, so this table carries the raw text.
+/// (`PostBody`) - never on the server, so this table carries the raw text.
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 pub struct FaqEntry {
     pub id:         Uuid,

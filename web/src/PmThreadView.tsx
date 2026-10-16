@@ -39,7 +39,7 @@ export default function PmThreadView() {
   useResolveUsers(thread?.participant_ids ?? [])
   const isOneToOne = others.length === 1
 
-  // Best-effort mark-as-read at mount — failures (e.g. the thread turning out
+  // Best-effort mark-as-read at mount - failures (e.g. the thread turning out
   // to be inaccessible) are swallowed, the "not found" branch handles that.
   useEffect(() => {
     if (!threadId) return
@@ -147,7 +147,7 @@ export default function PmThreadView() {
   )
 }
 
-/** Comma-joined resolved names — a thin wrapper so each id can go through
+/** Comma-joined resolved names - a thin wrapper so each id can go through
  *  the `useUser` hook (via `AuthorName`) without breaking the rules of hooks
  *  in the caller, which only ever renders this as a whole component. */
 function OtherNames({ ids }: { ids: string[] }) {

@@ -2,7 +2,7 @@
 //! the console.
 //!
 //! Declared by `module.toml`'s `[[settings]]`, stored in `core.settings`, and read
-//! back here through `/internal/modules/forum/settings` — a module owns its own
+//! back here through `/internal/modules/forum/settings` - a module owns its own
 //! schema and cannot read the core's tables, and a background worker has no user
 //! token for the public config route. The module is named in the URL so the read
 //! works whether the instance shares one master secret or a derived one per
@@ -42,7 +42,7 @@ impl ApprovalMode {
     /// Whether a contribution is published straight away.
     ///
     /// `post_count` is the author's tally in `forum.user_profiles`. Moderators
-    /// and administrators never queue — a queue nobody can be trusted past is a
+    /// and administrators never queue - a queue nobody can be trusted past is a
     /// forum nobody can run.
     pub fn publishes_immediately(self, is_moderator: bool, post_count: i32, new_member_below: i32) -> bool {
         if is_moderator {
@@ -55,7 +55,7 @@ impl ApprovalMode {
         }
     }
 
-    /// Whether the queue is armed at all — lets callers skip the profile lookup
+    /// Whether the queue is armed at all - lets callers skip the profile lookup
     /// on the overwhelmingly common "no moderation" instance.
     pub fn is_active(self) -> bool {
         !matches!(self, Self::None)

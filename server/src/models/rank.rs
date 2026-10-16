@@ -4,7 +4,7 @@ use uuid::Uuid;
 use validator::Validate;
 
 /// One row of the members directory (a participant, i.e. anyone with a forum
-/// profile — the module does not own the account list, the core does).
+/// profile - the module does not own the account list, the core does).
 #[derive(Debug, Serialize, sqlx::FromRow)]
 pub struct MemberRow {
     pub user_id:      Uuid,

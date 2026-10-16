@@ -28,7 +28,7 @@ struct DirectoryUser {
 /// Best-effort resolution of a user's public display name through the core's
 /// internal directory, with a short-lived cache so notifying N recipients for
 /// the same actor costs at most one HTTP round trip per TTL window. Returns
-/// `None` on any cache miss + network/parse failure — callers must fall back
+/// `None` on any cache miss + network/parse failure - callers must fall back
 /// to a generic, name-less title in that case, never fail on account of this.
 pub async fn display_name(state: &AppState, user_id: Uuid) -> Option<String> {
     if let Some(entry) = NAME_CACHE.get(&user_id) {
@@ -89,7 +89,7 @@ static GROUPS_CACHE: LazyLock<DashMap<Uuid, (Vec<Uuid>, Instant)>> = LazyLock::n
 /// internal directory with the same short-lived cache as [`display_name`].
 ///
 /// SECURITY: this only ever GRANTS additional forum access (see
-/// `permission_service`), so it fails CLOSED — any network/parse error, or an
+/// `permission_service`), so it fails CLOSED - any network/parse error, or an
 /// unknown user, yields an EMPTY set, never a guessed one. A core outage can
 /// therefore only withhold group-granted extras, never widen visibility, and
 /// the role-based rules keep working untouched.
@@ -131,7 +131,7 @@ pub async fn user_group_ids(state: &AppState, user_id: Uuid) -> Vec<Uuid> {
 }
 
 /// Every group of the instance (id + name), for an admin picking which groups a
-/// per-group forum rule applies to. Empty on any failure — the admin UI then
+/// per-group forum rule applies to. Empty on any failure - the admin UI then
 /// simply shows no groups rather than erroring.
 pub async fn list_groups(state: &AppState) -> Vec<DirectoryGroup> {
     let url = format!("{}/internal/directory/groups", state.settings.core.url);

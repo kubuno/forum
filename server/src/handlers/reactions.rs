@@ -17,7 +17,7 @@ use crate::{
     state::AppState,
 };
 
-/// POST /posts/:id/react — toggles the requesting user's reaction.
+/// POST /posts/:id/react - toggles the requesting user's reaction.
 pub async fn react(
     State(state): State<AppState>,
     Extension(user): Extension<ForumUser>,
@@ -42,7 +42,7 @@ pub async fn react(
     Ok(Json(json!({ "added": added, "reactions": reactions })))
 }
 
-/// GET /posts/:id/reactions/users — who reacted, grouped by emoji (up to 50
+/// GET /posts/:id/reactions/users - who reacted, grouped by emoji (up to 50
 /// users each). Reuses the exact same visibility gate as reading the post
 /// itself (SEC-02): a post still waiting for approval or removed by
 /// moderation stays hidden from everyone but its author and the moderators,
@@ -62,7 +62,7 @@ pub async fn users_for_post(
     Ok(Json(json!({ "reactions": reactions })))
 }
 
-/// GET /topics/:id/reactions — per-post aggregates for the whole topic.
+/// GET /topics/:id/reactions - per-post aggregates for the whole topic.
 pub async fn for_topic(
     State(state): State<AppState>,
     Extension(user): Extension<ForumUser>,

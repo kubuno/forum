@@ -87,7 +87,7 @@ interface Opts {
 /** Detects an "@query" token being typed in a textarea, looks up matching
  *  users (debounced), and lets the caller insert "@display_name " on
  *  selection. Renders its own dropdown via a portal, positioned at the
- *  caret — nothing is rendered when no token is active. */
+ *  caret - nothing is rendered when no token is active. */
 export function useMentionPicker({ value, onChange, textareaRef, onMention }: Opts) {
   const [token, setToken] = useState<Token | null>(null)
   const [results, setResults] = useState<UserBrief[]>([])

@@ -47,7 +47,7 @@ pub async fn for_topic(State(state): State<AppState>, Path(id): Path<Uuid>) -> R
     Ok(Json(json!({ "tags": tags })))
 }
 
-/// PUT /topics/:id/tags — author or moderator replaces a topic's tags.
+/// PUT /topics/:id/tags - author or moderator replaces a topic's tags.
 pub async fn set_for_topic(
     State(state): State<AppState>,
     Extension(user): Extension<ForumUser>,

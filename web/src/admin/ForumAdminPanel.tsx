@@ -1,6 +1,6 @@
 // Instance administration of the forum, rendered in the core admin console under
-// Modules ▸ Forum. It manages OBJECTS — categories, forums, ranks, report
-// reasons, censored words, profile fields, FAQ — not scalar settings, so each
+// Modules ▸ Forum. It manages OBJECTS - categories, forums, ranks, report
+// reasons, censored words, profile fields, FAQ - not scalar settings, so each
 // page is a custom section registered through `ModuleAdminRegistry`, exactly as
 // mail registers its `addresses`/`dkim` sections. The backend endpoints are the
 // same guarded ones (`assert_admin`) the module already exposed.
@@ -18,7 +18,7 @@ import { ProfileFieldsSection } from './sections/ProfileFieldsSection'
 import { FaqSection } from './sections/FaqSection'
 
 // Registers the forum's admin sections into the core console. Each is mounted on
-// its declared `[[setting_groups]]` page WITHOUT a label — the section IS the
+// its declared `[[setting_groups]]` page WITHOUT a label - the section IS the
 // page (it brings its own layout), rather than one tab among several.
 export function registerForumAdmin() {
   ModuleAdminRegistry.register({

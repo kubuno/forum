@@ -150,7 +150,7 @@ impl ReactionService {
         Ok(map)
     }
 
-    /// Who reacted to one post, grouped by emoji — up to 50 users per emoji
+    /// Who reacted to one post, grouped by emoji - up to 50 users per emoji
     /// (oldest reaction first), for the "who reacted" tooltip.
     pub async fn users_for_post(post_id: Uuid, db: &DbPool) -> Result<Vec<ReactionUsers>> {
         let rows = db

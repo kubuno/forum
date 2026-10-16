@@ -48,7 +48,7 @@ export default function ForumSidebarBody({ collapsed = false }: { collapsed?: bo
     <div className="flex flex-col gap-0.5 px-3 py-2">
       {/* Notifications are surfaced by the shared header bell (the core's
           notification store), fed in real time by the forum's WS events, and
-          caught up on mount by useForumNotificationSync() below — the module
+          caught up on mount by useForumNotificationSync() below - the module
           no longer keeps its own bell. */}
       <SidebarNavItem
         label={t('forums')}

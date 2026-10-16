@@ -152,7 +152,7 @@ pub struct ModNoteDto {
 // ── IP / email bans (enforced server-side, exact match) ────────
 
 /// A banned IP address (`services::ban_registry`, `middleware::enforce_ban`).
-/// `value` is always the exact, canonical `IpAddr::to_string()` form — no
+/// `value` is always the exact, canonical `IpAddr::to_string()` form - no
 /// CIDR, no wildcard.
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 pub struct IpBan {
@@ -173,7 +173,7 @@ pub struct IpBanDto {
     pub days:   Option<i64>, // None = permanent
 }
 
-/// A banned email address (always stored lowercase — see
+/// A banned email address (always stored lowercase - see
 /// `services::moderation_service::ModerationService::ban_email`).
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 pub struct EmailBan {
@@ -197,7 +197,7 @@ pub struct EmailBanDto {
 // ── Word censor (applied server-side at render time) ───────────
 
 /// An admin-curated word/phrase substituted in every post body when it is
-/// rendered — see `services::censor_service`. `pattern` is always a literal
+/// rendered - see `services::censor_service`. `pattern` is always a literal
 /// word or phrase, never a regex fragment: the service escapes it
 /// (`regex::escape`) before compiling a case-insensitive, word-boundary
 /// regex, so an admin can never inject an expensive or malicious pattern.

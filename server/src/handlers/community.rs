@@ -26,7 +26,7 @@ pub struct HeartbeatDto {
     pub path: Option<String>,
 }
 
-/// POST /me/heartbeat — keeps the user listed as online.
+/// POST /me/heartbeat - keeps the user listed as online.
 pub async fn heartbeat(
     State(state): State<AppState>,
     Extension(user): Extension<ForumUser>,
@@ -36,7 +36,7 @@ pub async fn heartbeat(
     Ok(Json(json!({ "ok": true })))
 }
 
-/// POST /me/read-all — marks every visible, non-deleted topic across every
+/// POST /me/read-all - marks every visible, non-deleted topic across every
 /// forum the caller can see as read, up to its latest message.
 pub async fn read_all(
     State(state): State<AppState>,
@@ -46,13 +46,13 @@ pub async fn read_all(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// GET /online — user ids active in the last 5 minutes.
+/// GET /online - user ids active in the last 5 minutes.
 pub async fn online(State(state): State<AppState>) -> Result<Json<Value>> {
     let ids = PresenceService::who_online(5, &state.db).await?;
     Ok(Json(json!({ "user_ids": ids })))
 }
 
-/// GET /stats — community-wide totals.
+/// GET /stats - community-wide totals.
 pub async fn stats(State(state): State<AppState>) -> Result<Json<Value>> {
     let stats = StatsService::global(&state.db).await?;
     Ok(Json(json!({ "stats": stats })))
@@ -66,11 +66,11 @@ fn topic_id_from_path(path: &str) -> Option<Uuid> {
     Uuid::parse_str(segment).ok()
 }
 
-/// GET /online/detailed — "who's online", with a best-effort readable location
+/// GET /online/detailed - "who's online", with a best-effort readable location
 /// (the topic the user is currently on) for each entry.
 ///
 /// SECURITY: the location is only included when the *caller* can view the
-/// forum the topic lives in (`PermissionService::effective`) — a member on a
+/// forum the topic lives in (`PermissionService::effective`) - a member on a
 /// restricted forum's topic must never leak that forum's existence or the
 /// topic's title to callers who cannot see it (mirrors SEC-01/14). Any other
 /// path (not a topic, or a topic that no longer resolves) simply carries no
@@ -99,7 +99,7 @@ pub async fn online_detailed(
     Ok(Json(json!({ "users": users })))
 }
 
-/// GET /leaderboard — top contributors by post count.
+/// GET /leaderboard - top contributors by post count.
 pub async fn leaderboard(State(state): State<AppState>) -> Result<Json<Value>> {
     let top = StatsService::top_posters(20, &state.db).await?;
     let top: Vec<Value> = top
@@ -117,7 +117,7 @@ pub struct MembersQuery {
     pub offset: Option<i64>,
 }
 
-/// GET /members — paginated members directory. "Members" here are participants:
+/// GET /members - paginated members directory. "Members" here are participants:
 /// anyone who has a forum profile (posted, reacted, or set a profile). The core
 /// owns the full account list; the forum only knows who has taken part.
 pub async fn members(State(state): State<AppState>, Query(q): Query<MembersQuery>) -> Result<Json<Value>> {
@@ -135,11 +135,11 @@ pub struct TeamMember {
     pub user_id:    Uuid,
 }
 
-/// GET /team — the moderation team, grouped by forum.
+/// GET /team - the moderation team, grouped by forum.
 ///
 /// The core does not expose the platform's admin roster to a module, so this
 /// deliberately lists per-forum moderators only ("team" page,
-/// moderation flavor) — never platform admins. Restricted to forums the
+/// moderation flavor) - never platform admins. Restricted to forums the
 /// caller may see, via the same `push_visible_forum` predicate every other
 /// listing uses (SEC-01/14): a forum hidden from the caller never leaks its
 /// moderators either.

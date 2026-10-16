@@ -17,7 +17,7 @@ impl DraftService {
             return Err(ForumError::Validation("forum_id or topic_id required".into()));
         }
         if dto.body_md.trim().is_empty() && dto.title.as_deref().unwrap_or("").trim().is_empty() {
-            // Nothing worth keeping — clear any existing draft for this context.
+            // Nothing worth keeping - clear any existing draft for this context.
             Self::clear(user_id, dto.forum_id, dto.topic_id, db).await?;
             return Ok(None);
         }

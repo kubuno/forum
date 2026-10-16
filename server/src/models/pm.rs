@@ -1,6 +1,6 @@
 //! Private messages: modern 1:1 / small-group conversations (see migration
-//! `000013`). Kept fully separate from the discussion boards — no folders,
-//! no rules engine — and from search (`search_service` never touches these
+//! `000013`). Kept fully separate from the discussion boards - no folders,
+//! no rules engine - and from search (`search_service` never touches these
 //! tables: a DM is never indexed).
 
 use chrono::{DateTime, Utc};
@@ -29,7 +29,7 @@ pub struct PmMessage {
 /// Starts a new thread with its first message, in one call.
 #[derive(Debug, Deserialize, Validate)]
 pub struct CreateThreadDto {
-    /// The other participants. Capped well below "broadcast" territory —
+    /// The other participants. Capped well below "broadcast" territory -
     /// this is a conversation, not a mailing list.
     #[validate(length(min = 1, max = 10))]
     pub recipient_ids: Vec<Uuid>,
@@ -45,14 +45,14 @@ pub struct SendMessageDto {
     pub body_md: String,
 }
 
-/// `POST /me/pm/blocks` — the target to block. `DELETE /me/pm/blocks/:uid`
+/// `POST /me/pm/blocks` - the target to block. `DELETE /me/pm/blocks/:uid`
 /// takes the id from the path instead and does not use this DTO.
 #[derive(Debug, Deserialize)]
 pub struct BlockDto {
     pub user_id: Uuid,
 }
 
-/// One row of `GET /me/pm` — enough to render the inbox list without a
+/// One row of `GET /me/pm` - enough to render the inbox list without a
 /// second round trip per thread.
 #[derive(Debug, Serialize)]
 pub struct ThreadSummary {
@@ -69,8 +69,8 @@ pub struct ThreadSummary {
     pub unread_count:          i64,
 }
 
-/// `GET /me/pm/:id` thread header, per the contract — deliberately narrower
-/// than [`ThreadSummary`] (no preview/unread — the caller is about to read
+/// `GET /me/pm/:id` thread header, per the contract - deliberately narrower
+/// than [`ThreadSummary`] (no preview/unread - the caller is about to read
 /// the messages themselves).
 #[derive(Debug, Serialize)]
 pub struct ThreadDetail {

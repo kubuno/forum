@@ -10,7 +10,7 @@ import { useModulePrefs } from './userPrefs'
 
 // This page holds ONLY per-user settings: forum preferences and the member's own
 // signature. Instance administration (categories, forums, ranks) lives in the
-// core admin console under Modules ▸ Forum — see `admin/ForumAdminPanel.tsx` —
+// core admin console under Modules ▸ Forum - see `admin/ForumAdminPanel.tsx` -
 // never on a user's own settings page.
 
 // ── Per-user preferences (backend, cross-device via core users.preferences) ─────

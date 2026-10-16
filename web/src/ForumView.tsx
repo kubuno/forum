@@ -32,7 +32,7 @@ export default function ForumView() {
   const { confirm, confirmState, handleConfirm, handleCancel } = useConfirm()
 
   // A different forum starts back at its first page, and drops any in-progress
-  // multi-select — the selected ids would no longer even belong to this list.
+  // multi-select - the selected ids would no longer even belong to this list.
   useEffect(() => { setPage(1); setSelectMode(false); setSelectedTopics(new Set()) }, [forumId])
 
   // Open the composer when arriving with ?new=1 (from the global "New" button).

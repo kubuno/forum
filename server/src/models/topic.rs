@@ -31,7 +31,7 @@ pub struct Topic {
     /// recoverable, visible only to its author and moderators (SEC-12).
     #[serde(default)]
     pub is_deleted:        bool,
-    /// When/by whom it was soft-deleted — surfaced to moderators in the trash.
+    /// When/by whom it was soft-deleted - surfaced to moderators in the trash.
     pub deleted_at:        Option<DateTime<Utc>>,
     pub deleted_by:        Option<Uuid>,
     pub created_at:        DateTime<Utc>,

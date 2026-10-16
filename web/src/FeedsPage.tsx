@@ -6,13 +6,13 @@ import { Spinner, Button, Input, ConfirmDialog } from '@ui'
 import { useConfirm } from '@kubuno/sdk'
 import { forumApi } from './api'
 
-/** Absolute URL of a feed document, as a feed reader would fetch it — through
+/** Absolute URL of a feed document, as a feed reader would fetch it - through
  *  the core proxy, so it is rooted at the current origin. */
 function feedUrl(token: string, kind: 'atom' | 'rss'): string {
   return `${window.location.origin}/api/v1/forum/public/feeds/${encodeURIComponent(token)}/${kind}.xml`
 }
 
-/** `/forum/feeds` — mint and revoke personal RSS/Atom feed URLs. Each token is a
+/** `/forum/feeds` - mint and revoke personal RSS/Atom feed URLs. Each token is a
  *  secret capability: anyone holding the URL sees exactly what its owner may see
  *  (evaluated as an ordinary member), so it must be treated like a password. */
 export default function FeedsPage() {
@@ -50,7 +50,7 @@ export default function FeedsPage() {
       await navigator.clipboard.writeText(feedUrl(token, 'atom'))
       setCopied(token)
       setTimeout(() => setCopied(c => (c === token ? null : c)), 1500)
-    } catch { /* clipboard unavailable — the field is selectable as a fallback */ }
+    } catch { /* clipboard unavailable - the field is selectable as a fallback */ }
   }
 
   return (
@@ -61,7 +61,7 @@ export default function FeedsPage() {
           <h1 className="text-lg font-semibold text-text-primary">{t('rss_feeds', { defaultValue: 'Flux RSS' })}</h1>
         </div>
         <p className="text-sm text-text-secondary mb-4">
-          {t('rss_feeds_desc', { defaultValue: 'Créez un lien personnel et secret pour suivre les sujets récents dans votre lecteur de flux. Il montre exactement ce que vous pouvez voir — ne le partagez pas.' })}
+          {t('rss_feeds_desc', { defaultValue: 'Créez un lien personnel et secret pour suivre les sujets récents dans votre lecteur de flux. Il montre exactement ce que vous pouvez voir - ne le partagez pas.' })}
         </p>
 
         <div className="flex items-end gap-2 mb-5">

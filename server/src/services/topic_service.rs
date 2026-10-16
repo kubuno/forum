@@ -18,7 +18,7 @@ const VALID_TYPES: [&str; 4] = ["normal", "sticky", "announcement", "global"];
 
 /// The WHERE predicate shared by `prune_forum`'s preview and its actual pass:
 /// stale, non-deleted topics of one forum. Pinned types, a solved question, and
-/// any topic carrying a poll are excluded — a prune is meant for dead ordinary
+/// any topic carrying a poll are excluded - a prune is meant for dead ordinary
 /// discussions, not content an admin (or a poll's voters) expects to keep
 /// finding in place. The two placeholder tokens are the forum id and the
 /// activity cutoff (`Utc::now() - older_than_days`, computed in Rust so no
@@ -93,7 +93,7 @@ impl TopicService {
             .ok_or_else(|| ForumError::NotFound(format!("Topic {id}")))
     }
 
-    /// This user's read marker for one topic — `None` when no row exists yet.
+    /// This user's read marker for one topic - `None` when no row exists yet.
     pub async fn read_marker(topic_id: Uuid, user_id: Uuid, db: &DbPool) -> Result<Option<DateTime<Utc>>> {
         let read_at: Option<DateTime<Utc>> = db
             .fetch_optional_scalar(
@@ -131,7 +131,7 @@ impl TopicService {
         Ok(rows)
     }
 
-    /// Total topics matching `feed`'s filters — same WHERE clause, no
+    /// Total topics matching `feed`'s filters - same WHERE clause, no
     /// ORDER/LIMIT, so pagination never counts a topic the caller cannot see.
     pub async fn feed_count(
         kind: &str,
@@ -274,7 +274,7 @@ impl TopicService {
         }
 
         // Attach selected tags (only ones that exist). `$2` is bound twice by two
-        // distinct placeholders — a placeholder is never reused on the portable
+        // distinct placeholders - a placeholder is never reused on the portable
         // path.
         let tag_sql = format!(
             "INSERT {}INTO forum.topic_tags (topic_id, tag_id) \

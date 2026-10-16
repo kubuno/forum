@@ -30,12 +30,12 @@ enum FeedKind {
 }
 
 /// Reconstructs the public origin the reader used, but ONLY from
-/// `X-Forwarded-Host` — a forwarding proxy chain that means to expose the feed
+/// `X-Forwarded-Host` - a forwarding proxy chain that means to expose the feed
 /// externally sets it deliberately. The plain `Host` header is useless here: by
 /// the time the request reaches this module it names the core's loopback target
 /// (`127.0.0.1:<port>`), never the public site. When no forwarded host is
 /// present we return an empty base, so the feed emits ROOT-RELATIVE links
-/// (`/forum/...`) — a feed reader resolves those against the feed's own URL,
+/// (`/forum/...`) - a feed reader resolves those against the feed's own URL,
 /// which is already the correct public origin, so they end up right regardless.
 fn base_from_headers(headers: &HeaderMap) -> String {
     let host = headers
@@ -85,7 +85,7 @@ async fn serve_feed(state: &AppState, token: &str, headers: &HeaderMap, kind: Fe
         .map_err(|e| ForumError::Internal(e.into()))
 }
 
-/// GET /public/feeds/:token/atom.xml — anonymous, token-authenticated.
+/// GET /public/feeds/:token/atom.xml - anonymous, token-authenticated.
 pub async fn public_atom(
     State(state): State<AppState>,
     Path(token): Path<String>,
@@ -94,7 +94,7 @@ pub async fn public_atom(
     serve_feed(&state, &token, &headers, FeedKind::Atom).await
 }
 
-/// GET /public/feeds/:token/rss.xml — anonymous, token-authenticated.
+/// GET /public/feeds/:token/rss.xml - anonymous, token-authenticated.
 pub async fn public_rss(
     State(state): State<AppState>,
     Path(token): Path<String>,
@@ -105,7 +105,7 @@ pub async fn public_rss(
 
 // ── Token management (authenticated) ─────────────────────────────────────────
 
-/// GET /me/feed-tokens — the caller's own feed URLs.
+/// GET /me/feed-tokens - the caller's own feed URLs.
 pub async fn list_tokens(
     State(state): State<AppState>,
     Extension(user): Extension<ForumUser>,
@@ -114,7 +114,7 @@ pub async fn list_tokens(
     Ok(Json(json!({ "tokens": tokens })))
 }
 
-/// POST /me/feed-tokens — mints a new feed URL.
+/// POST /me/feed-tokens - mints a new feed URL.
 pub async fn create_token(
     State(state): State<AppState>,
     Extension(user): Extension<ForumUser>,
@@ -125,7 +125,7 @@ pub async fn create_token(
     Ok((StatusCode::CREATED, Json(json!({ "token": token }))))
 }
 
-/// DELETE /me/feed-tokens/:token — revokes one of the caller's feed URLs.
+/// DELETE /me/feed-tokens/:token - revokes one of the caller's feed URLs.
 pub async fn revoke_token(
     State(state): State<AppState>,
     Extension(user): Extension<ForumUser>,

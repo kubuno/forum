@@ -54,8 +54,8 @@ async fn last_post(
 
 /// Recompute a topic's first/last post pointers and reply count.
 ///
-/// Only APPROVED messages count. These aggregates are what the lists show —
-/// "3 replies, last one an hour ago" — so counting a message still waiting in
+/// Only APPROVED messages count. These aggregates are what the lists show -
+/// "3 replies, last one an hour ago" - so counting a message still waiting in
 /// the moderation queue would advertise content the reader cannot open, and
 /// would leak that someone posted something a moderator has not released.
 pub async fn recompute_topic(tx: &mut DbTx, topic_id: Uuid) -> Result<()> {

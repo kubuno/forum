@@ -49,7 +49,7 @@ pub async fn report_post(
 
 // ── Predefined report reasons (admin-curated chip list) ─────────────────────────
 
-/// GET /report-reasons — every authenticated member sees the chip list, so it
+/// GET /report-reasons - every authenticated member sees the chip list, so it
 /// can be offered at the moment they file a report.
 pub async fn list_report_reasons(State(state): State<AppState>) -> Result<Json<Value>> {
     let reasons = ModerationService::list_report_reasons(&state.db).await?;
@@ -81,8 +81,8 @@ pub async fn delete_report_reason(
 
 // ── Word censor (admin-curated, applied server-side at render time) ─────────
 
-/// GET /censored-words — any authenticated member can see the active list
-/// (there is nothing sensitive in it — it is applied to everyone's view of
+/// GET /censored-words - any authenticated member can see the active list
+/// (there is nothing sensitive in it - it is applied to everyone's view of
 /// every post regardless), only an admin can change it.
 pub async fn list_censored_words(State(state): State<AppState>) -> Result<Json<Value>> {
     let words = CensorService::list(&state.db).await?;
@@ -236,7 +236,7 @@ async fn moderation_scope(user: &ForumUser, state: &AppState) -> Result<Option<V
     Ok(Some(forums))
 }
 
-/// GET /mod/queue — contributions waiting for a decision.
+/// GET /mod/queue - contributions waiting for a decision.
 pub async fn pending_queue(
     State(state): State<AppState>,
     Extension(user): Extension<ForumUser>,
@@ -255,7 +255,7 @@ async fn assert_may_decide(post_id: Uuid, user: &ForumUser, state: &AppState) ->
     if forums.contains(&post.forum_id) { Ok(()) } else { Err(ForumError::Forbidden) }
 }
 
-/// POST /mod/queue/:id/approve — publish a held message (and its topic).
+/// POST /mod/queue/:id/approve - publish a held message (and its topic).
 pub async fn approve_pending(
     State(state): State<AppState>,
     Extension(user): Extension<ForumUser>,
@@ -272,7 +272,7 @@ pub async fn approve_pending(
     Ok(Json(json!({ "ok": true })))
 }
 
-/// POST /mod/queue/:id/reject — discard a held message (and its topic).
+/// POST /mod/queue/:id/reject - discard a held message (and its topic).
 pub async fn reject_pending(
     State(state): State<AppState>,
     Extension(user): Extension<ForumUser>,
@@ -310,7 +310,7 @@ pub async fn warn_user(
     dto.validate().map_err(|e| ForumError::Validation(e.to_string()))?;
     assert_can_moderate(&user, &state).await?;
     let warning = ModerationService::warn(uid, user.id, &dto.reason, &state.db).await?;
-    // The warned member should know — and know why.
+    // The warned member should know - and know why.
     NotificationService::notify_simple(&state, uid, "warning", user.id, Some(&dto.reason)).await;
     Ok(Json(json!({ "warning": warning })))
 }
@@ -476,7 +476,7 @@ pub async fn restore_post(
 
 // ── Trash (soft-deleted topics) ─────────────────────────────────────────────
 
-/// GET /trash — soft-deleted topics. Mods see their own forums, admins see all
+/// GET /trash - soft-deleted topics. Mods see their own forums, admins see all
 /// (same scoping as the report queue and the log).
 pub async fn list_trash(
     State(state): State<AppState>,
@@ -487,7 +487,7 @@ pub async fn list_trash(
     Ok(Json(json!({ "topics": topics })))
 }
 
-/// A moderator of the topic's own forum, or an admin — like the other
+/// A moderator of the topic's own forum, or an admin - like the other
 /// topic-moderation actions in handlers/topics.rs, but this one lives here
 /// since it operates on already-deleted topics (the trash).
 async fn assert_can_moderate_topic(topic_id: Uuid, user: &ForumUser, state: &AppState) -> Result<Uuid> {
@@ -508,18 +508,18 @@ pub struct BulkTopicsDto {
     pub action: String,
 }
 
-/// Largest batch a single call accepts. Keeps the request — and the sequential
-/// per-topic work it triggers — bounded, rather than letting a client stream
+/// Largest batch a single call accepts. Keeps the request - and the sequential
+/// per-topic work it triggers - bounded, rather than letting a client stream
 /// an unbounded id list into one handler invocation.
 const BULK_TOPICS_MAX: usize = 100;
 
-/// POST /mod/topics/bulk — apply lock/unlock/delete to many topics at once.
+/// POST /mod/topics/bulk - apply lock/unlock/delete to many topics at once.
 ///
 /// Each topic is revalidated on its own (SEC-05): the batch may freely mix
 /// topics from several forums, and a caller who moderates forum A must not be
 /// able to smuggle an action onto a topic living in forum B just because its
-/// id rode along in the same request. A topic that fails that check — or the
-/// action itself — is silently skipped and counted, rather than aborting the
+/// id rode along in the same request. A topic that fails that check - or the
+/// action itself - is silently skipped and counted, rather than aborting the
 /// whole batch, so one bad id can't block the rest.
 pub async fn bulk_topics(
     State(state): State<AppState>,
@@ -541,7 +541,7 @@ pub async fn bulk_topics(
     let mut done = 0i64;
     let mut skipped = 0i64;
     for &id in &dto.topic_ids {
-        // Per-topic permission check — this is not just an optimization, it is
+        // Per-topic permission check - this is not just an optimization, it is
         // the boundary that keeps a mod of one forum off another forum's topics.
         let forum_id = match assert_can_moderate_topic(id, &user, &state).await {
             Ok(forum_id) => forum_id,
@@ -563,7 +563,7 @@ pub async fn bulk_topics(
     Ok(Json(json!({ "done": done, "skipped": skipped })))
 }
 
-/// POST /topics/:id/restore — bring a soft-deleted topic back. Any moderator
+/// POST /topics/:id/restore - bring a soft-deleted topic back. Any moderator
 /// of its forum (or an admin) may do this, same as the soft-delete itself.
 pub async fn restore_topic(
     State(state): State<AppState>,
@@ -576,7 +576,7 @@ pub async fn restore_topic(
     Ok(Json(json!({ "topic": topic })))
 }
 
-/// DELETE /topics/:id/purge — erase a soft-deleted topic for good. Admin only:
+/// DELETE /topics/:id/purge - erase a soft-deleted topic for good. Admin only:
 /// unlike restore, this is not reversible, so it is not left to ordinary
 /// moderators the way the soft-delete/restore pair is.
 pub async fn purge_topic(
@@ -601,7 +601,7 @@ pub struct PruneForumDto {
     pub dry_run: bool,
 }
 
-/// POST /forums/:id/prune — admin only. `dry_run: true` only counts how many
+/// POST /forums/:id/prune - admin only. `dry_run: true` only counts how many
 /// topics would be affected (nothing is written), so the console can show a
 /// preview before the admin commits to the actual soft-delete pass.
 pub async fn prune_forum(

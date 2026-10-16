@@ -19,7 +19,7 @@ use crate::{
     state::AppState,
 };
 
-/// GET /me/pm — the caller's inbox, most recently active thread first.
+/// GET /me/pm - the caller's inbox, most recently active thread first.
 pub async fn list_threads(
     State(state): State<AppState>,
     Extension(user): Extension<ForumUser>,
@@ -30,7 +30,7 @@ pub async fn list_threads(
     Ok(Json(json!({ "threads": threads })))
 }
 
-/// POST /me/pm — starts a new thread with its first message.
+/// POST /me/pm - starts a new thread with its first message.
 pub async fn create_thread(
     State(state): State<AppState>,
     Extension(user): Extension<ForumUser>,
@@ -45,7 +45,7 @@ pub async fn create_thread(
     Ok((StatusCode::CREATED, Json(json!({ "thread": thread, "message": message }))))
 }
 
-/// GET /me/pm/unread — thread count with at least one unread message.
+/// GET /me/pm/unread - thread count with at least one unread message.
 pub async fn unread_count(
     State(state): State<AppState>,
     Extension(user): Extension<ForumUser>,
@@ -54,7 +54,7 @@ pub async fn unread_count(
     Ok(Json(json!({ "count": count })))
 }
 
-/// GET /me/pm/blocks — ids the caller has blocked.
+/// GET /me/pm/blocks - ids the caller has blocked.
 pub async fn list_blocks(
     State(state): State<AppState>,
     Extension(user): Extension<ForumUser>,
@@ -63,7 +63,7 @@ pub async fn list_blocks(
     Ok(Json(json!({ "blocked": blocked })))
 }
 
-/// POST /me/pm/blocks — blocks a user (idempotent).
+/// POST /me/pm/blocks - blocks a user (idempotent).
 pub async fn create_block(
     State(state): State<AppState>,
     Extension(user): Extension<ForumUser>,
@@ -73,7 +73,7 @@ pub async fn create_block(
     Ok(StatusCode::CREATED)
 }
 
-/// DELETE /me/pm/blocks/:uid — unblocks a user.
+/// DELETE /me/pm/blocks/:uid - unblocks a user.
 pub async fn delete_block(
     State(state): State<AppState>,
     Extension(user): Extension<ForumUser>,
@@ -83,7 +83,7 @@ pub async fn delete_block(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// GET /me/pm/:id — thread header + its messages. 404 for a non-participant.
+/// GET /me/pm/:id - thread header + its messages. 404 for a non-participant.
 pub async fn get_thread(
     State(state): State<AppState>,
     Extension(user): Extension<ForumUser>,
@@ -93,7 +93,7 @@ pub async fn get_thread(
     Ok(Json(json!({ "thread": thread, "messages": messages })))
 }
 
-/// POST /me/pm/:id — appends a message to an existing thread.
+/// POST /me/pm/:id - appends a message to an existing thread.
 pub async fn send_message(
     State(state): State<AppState>,
     Extension(user): Extension<ForumUser>,
@@ -109,7 +109,7 @@ pub async fn send_message(
     Ok((StatusCode::CREATED, Json(json!({ "message": message }))))
 }
 
-/// POST /me/pm/:id/read — marks the thread read up to now for the caller.
+/// POST /me/pm/:id/read - marks the thread read up to now for the caller.
 pub async fn mark_read(
     State(state): State<AppState>,
     Extension(user): Extension<ForumUser>,
@@ -119,7 +119,7 @@ pub async fn mark_read(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// DELETE /me/pm/:id — hides the thread for the caller only.
+/// DELETE /me/pm/:id - hides the thread for the caller only.
 pub async fn delete_thread(
     State(state): State<AppState>,
     Extension(user): Extension<ForumUser>,

@@ -65,7 +65,7 @@ struct SettingDefRaw {
     /// Fold behind the section's "advanced" disclosure.
     #[serde(default)]
     advanced:    bool,
-    /// "info" | "warning" | "danger" — how loudly to warn before changing it.
+    /// "info" | "warning" | "danger" - how loudly to warn before changing it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     risk:        Option<String>,
     /// Bounds for `type = "int"`, enforced by the core as well as the panel.
@@ -78,7 +78,7 @@ struct SettingDefRaw {
     unit:        Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     placeholder: Option<String>,
-    /// The string value is a list, one entry per line — render a textarea.
+    /// The string value is a list, one entry per line - render a textarea.
     #[serde(default)]
     multiline:   bool,
     /// Key of a boolean setting of the same module; hidden while it is off.
@@ -183,7 +183,7 @@ async fn main() -> Result<()> {
     }
 
     // Word censor: load the admin's list into memory once at boot, so the very
-    // first post rendered is already censored. Best-effort — a failed load must
+    // first post rendered is already censored. Best-effort - a failed load must
     // never block startup; the cache just stays empty until the next successful
     // reload (any admin write to the list retries it).
     if let Err(e) = kubuno_forum::services::censor_service::CensorService::reload(&pool).await {
@@ -259,11 +259,11 @@ async fn main() -> Result<()> {
                 match http2.post(&url).header("X-Internal-Secret", secret.as_str()).send().await {
                     Ok(r) if r.status().is_success() => {}
                     Ok(r) if r.status() == reqwest::StatusCode::NOT_FOUND => {
-                        tracing::info!("Heartbeat 404 — re-registering…");
+                        tracing::info!("Heartbeat 404 - re-registering…");
                         register_with_core(&http2, &settings2).await;
                     }
                     Ok(r) if r.status() == reqwest::StatusCode::FORBIDDEN => {
-                        tracing::info!("Heartbeat 403 — module disabled, waiting…");
+                        tracing::info!("Heartbeat 403 - module disabled, waiting…");
                     }
                     Ok(r)  => tracing::warn!(status = %r.status(), "Heartbeat unexpected response"),
                     Err(e) => tracing::warn!(error = %e, "Heartbeat network error"),

@@ -1,19 +1,19 @@
 //! Server-side word censor: an admin-curated list of words is
 //! substituted in post bodies at render time. The substitution happens on the
 //! server before a post is serialized, so a client has no toggle to bypass
-//! it — unlike a client-side filter, it cannot see the raw word at all.
+//! it - unlike a client-side filter, it cannot see the raw word at all.
 //!
 //! Patterns are compiled once into regexes and cached in memory (`CENSOR`),
 //! recompiled whenever the list changes (`reload`, called after every write)
-//! and once at boot (see `main.rs`). `apply` only reads the cache — no
-//! database round trip — so it is cheap enough to call on every rendered
+//! and once at boot (see `main.rs`). `apply` only reads the cache - no
+//! database round trip - so it is cheap enough to call on every rendered
 //! post.
 //!
 //! SEC: `pattern` is always treated as a literal word/phrase, never as a
-//! regex fragment — it is escaped with `regex::escape` before being compiled
+//! regex fragment - it is escaped with `regex::escape` before being compiled
 //! into `(?i)\b<escaped>\b`. Never build a regex directly from unescaped
 //! admin input. The `regex` crate is linear-time (no backtracking), so even
-//! an unescaped pattern could not cause ReDoS — but escaping still matters:
+//! an unescaped pattern could not cause ReDoS - but escaping still matters:
 //! without it, an admin-entered `.` or `(` would behave as regex syntax
 //! instead of a literal character, silently censoring the wrong things.
 
@@ -29,7 +29,7 @@ use crate::{
 };
 
 /// Compiled (pattern, replacement) pairs, rebuilt from `forum.censored_words`
-/// by `reload`. Empty until the first successful reload — `apply` is then a
+/// by `reload`. Empty until the first successful reload - `apply` is then a
 /// no-op, never a panic.
 static CENSOR: LazyLock<RwLock<Vec<(Regex, String)>>> = LazyLock::new(|| RwLock::new(Vec::new()));
 
@@ -37,8 +37,8 @@ pub struct CensorService;
 
 impl CensorService {
     /// Replaces every occurrence of a censored word in `text` (case
-    /// insensitive, word boundaries) using the in-memory cache. Read-only —
-    /// never touches the database — safe to call on every post rendered in a
+    /// insensitive, word boundaries) using the in-memory cache. Read-only -
+    /// never touches the database - safe to call on every post rendered in a
     /// listing. Falls back to the original text if the cache lock is
     /// poisoned (never expected, but this must not panic a request).
     pub fn apply(text: &str) -> String {
@@ -60,7 +60,7 @@ impl CensorService {
     }
 
     /// Recompiles the in-memory cache from the database. A pattern that fails
-    /// to compile (defensive check only — patterns are escaped literals, so
+    /// to compile (defensive check only - patterns are escaped literals, so
     /// this should not happen in practice) is skipped and logged rather than
     /// failing the whole reload.
     pub async fn reload(db: &DbPool) -> Result<()> {

@@ -3,8 +3,8 @@
 //!
 //! SECURITY (the whole point of this subsystem): every read is filtered by
 //! `forum.pm_participants` membership. A caller who is not a participant of a
-//! thread gets [`ForumError::NotFound`] — never `Forbidden`, never a byte of
-//! the thread's content — so probing a thread id reveals nothing about
+//! thread gets [`ForumError::NotFound`] - never `Forbidden`, never a byte of
+//! the thread's content - so probing a thread id reveals nothing about
 //! whether it exists.
 
 use std::collections::HashMap;
@@ -60,7 +60,7 @@ impl PmService {
     }
 
     /// Refuses when any of `targets` has blocked `sender`. Checked before a
-    /// thread is created and before every message is sent — never only at
+    /// thread is created and before every message is sent - never only at
     /// creation time, since a block can happen mid-conversation.
     async fn assert_not_blocked(sender: Uuid, targets: &[Uuid], db: &DbPool) -> Result<()> {
         if targets.is_empty() {
@@ -108,7 +108,7 @@ impl PmService {
 
     /// Resolves recipient ids through the core's directory. Fails on the
     /// FIRST id that doesn't resolve, with a message that never names which
-    /// one — a caller must not be able to use this to enumerate accounts.
+    /// one - a caller must not be able to use this to enumerate accounts.
     async fn assert_recipients_exist(state: &AppState, ids: &[Uuid]) -> Result<()> {
         for id in ids {
             if directory::display_name(state, *id).await.is_none() {
@@ -319,7 +319,7 @@ impl PmService {
         Ok(n)
     }
 
-    /// `GET /me/pm/:id` — 404 for a non-participant (SEC), never the content.
+    /// `GET /me/pm/:id` - 404 for a non-participant (SEC), never the content.
     pub async fn get_thread(thread_id: Uuid, user_id: Uuid, db: &DbPool) -> Result<(ThreadDetail, Vec<PmMessage>)> {
         Self::assert_participant(thread_id, user_id, db).await?;
 
@@ -362,7 +362,7 @@ impl PmService {
         Ok(())
     }
 
-    /// `DELETE /me/pm/:id` — hides the thread for this participant only.
+    /// `DELETE /me/pm/:id` - hides the thread for this participant only.
     pub async fn delete_for_user(thread_id: Uuid, user_id: Uuid, db: &DbPool) -> Result<()> {
         Self::assert_participant(thread_id, user_id, db).await?;
 

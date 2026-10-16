@@ -1,6 +1,6 @@
 // Structure section of the forum admin console (Modules ▸ Forum ▸ Structure):
 // categories and forums, instance-wide. Manages OBJECTS, so it is a custom
-// section rather than scalar settings — see `registerForumAdmin`.
+// section rather than scalar settings - see `registerForumAdmin`.
 
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -35,7 +35,7 @@ function ForumEditWindow({ forum, forums, onClose }: { forum: Forum; forums: For
   const [isReadonly, setIsReadonly] = useState(forum.is_readonly)
   const [busy, setBusy] = useState(false)
 
-  // A forum can never become its own parent — the only self-reference the
+  // A forum can never become its own parent - the only self-reference the
   // dropdown needs to rule out; deeper cycles are for the server to refuse.
   const parentOptions = [
     { value: '', label: t('no_parent_forum', { defaultValue: 'None' }) },
@@ -140,7 +140,7 @@ export function StructureSection() {
 
   // In-place forms replace the old chained `prompt()` dialogs: an "adding" row
   // opens inline above the list, and renaming swaps the row's label for an
-  // editable field — same interaction as `TopicView`'s post editing.
+  // editable field - same interaction as `TopicView`'s post editing.
   const startAddCategory = () => { setAddingCategory(true); setNewCategoryName('') }
   const cancelAddCategory = () => { setAddingCategory(false); setNewCategoryName('') }
   const submitAddCategory = async () => {
@@ -177,7 +177,7 @@ export function StructureSection() {
 
   // Reorders within ONE category: the ids sent are only that category's
   // forums, so the server only touches their `position` (see
-  // `ForumService::reorder`) — every other category keeps its own ordering.
+  // `ForumService::reorder`) - every other category keeps its own ordering.
   const moveForum = async (items: Forum[], index: number, dir: -1 | 1) => {
     const j = index + dir
     if (j < 0 || j >= items.length) return
@@ -238,7 +238,7 @@ export function StructureSection() {
               )}
             </li>
           ))}
-          {categories.length === 0 && !addingCategory && <li className="px-3 py-3 text-sm text-text-tertiary">—</li>}
+          {categories.length === 0 && !addingCategory && <li className="px-3 py-3 text-sm text-text-tertiary">-</li>}
         </ul>
       </section>
 

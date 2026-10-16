@@ -11,7 +11,7 @@ import { AuthorName, AuthorAvatar } from './Author'
 /** "The team" page. Lists per-forum moderators, grouped by forum.
  *
  * The core does not expose the platform's admin roster to a module, so this
- * deliberately shows the moderation team only — never platform admins — and
+ * deliberately shows the moderation team only - never platform admins - and
  * only for forums the backend already filtered as visible to the caller. */
 export default function TeamPage() {
   const { t } = useTranslation('forum')

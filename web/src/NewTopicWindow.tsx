@@ -31,7 +31,7 @@ export default function NewTopicWindow({ forumId, perms, onClose, onCreated }: P
 
   // Autosave: once the user has typed something non-trivial, persist a draft
   // in the background every 3s so the post survives an accidental close.
-  // Failures are swallowed on purpose — a draft is a convenience, never a
+  // Failures are swallowed on purpose - a draft is a convenience, never a
   // blocker for typing.
   const draftIdRef = useRef<string | null>(null)
   const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)

@@ -88,8 +88,8 @@ impl EngagementService {
         Ok(rows)
     }
 
-    /// Everyone watching a topic — directly, or through a subscription to its
-    /// forum — minus `exclude` (the author of the new message).
+    /// Everyone watching a topic - directly, or through a subscription to its
+    /// forum - minus `exclude` (the author of the new message).
     pub async fn topic_watchers(topic_id: Uuid, forum_id: Uuid, exclude: Uuid, db: &DbPool) -> Result<Vec<Uuid>> {
         let ids: Vec<Uuid> = db
             .fetch_all_as::<(Uuid,)>(
@@ -136,7 +136,7 @@ impl EngagementService {
     }
 
     /// Sets (or refreshes) a read marker's timestamp without touching
-    /// `last_read_post_id` — the "mark read" bulk operations' per-topic write.
+    /// `last_read_post_id` - the "mark read" bulk operations' per-topic write.
     async fn bump_read(db: &DbPool, user_id: Uuid, topic_id: Uuid) -> Result<()> {
         let b = db.backend();
         let sql = format!(

@@ -54,7 +54,7 @@ export default function ModeratorsWindow({ forumId, onClose }: { forumId: string
         </div>
         <div className="flex-1 min-h-0 overflow-auto rounded-lg border border-border">
           {isLoading ? <div className="p-6 flex justify-center"><Spinner /></div>
-            : moderators.length === 0 ? <div className="p-6 text-center text-sm text-text-tertiary">—</div>
+            : moderators.length === 0 ? <div className="p-6 text-center text-sm text-text-tertiary">-</div>
             : (
               <ul className="divide-y divide-border">
                 {moderators.map(m => (

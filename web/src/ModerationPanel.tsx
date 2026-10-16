@@ -13,8 +13,8 @@ import { timeAgo, shortDateTime } from './helpers'
 type Tab = 'reports' | 'queue' | 'log' | 'bans' | 'trash'
 
 // The moderation page gathers everything a moderator acts on. Reports and the
-// approval queue are the daily work; the log and the ban list — until now with
-// no interface at all despite a complete backend — are the record and the roster.
+// approval queue are the daily work; the log and the ban list - until now with
+// no interface at all despite a complete backend - are the record and the roster.
 
 export default function ModerationPanel() {
   const { t } = useTranslation('forum')
@@ -237,7 +237,7 @@ function BansTab() {
   )
 }
 
-// IP bans (exact match — see services::ban_registry on the backend).
+// IP bans (exact match - see services::ban_registry on the backend).
 function IpBansSection() {
   const { t } = useTranslation('forum')
   const qc = useQueryClient()
@@ -295,7 +295,7 @@ function IpBansSection() {
   )
 }
 
-// Email bans (exact match — email is normalized to lowercase server-side).
+// Email bans (exact match - email is normalized to lowercase server-side).
 function EmailBansSection() {
   const { t } = useTranslation('forum')
   const qc = useQueryClient()

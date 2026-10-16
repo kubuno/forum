@@ -91,7 +91,7 @@ impl ProfileFieldService {
     }
 
     /// Replaces the whole definition, merging onto the existing row for any
-    /// column the caller left out — see the DTO's doc comment for why this is
+    /// column the caller left out - see the DTO's doc comment for why this is
     /// a merge-then-overwrite rather than a SQL `COALESCE`.
     pub async fn update_field(id: Uuid, dto: UpdateProfileFieldDto, db: &DbPool) -> Result<ProfileField> {
         let existing = Self::get_field(id, db).await?;

@@ -14,7 +14,7 @@ use crate::{
     state::AppState,
 };
 
-/// GET /topics/:id/poll — the topic's poll with results, or null.
+/// GET /topics/:id/poll - the topic's poll with results, or null.
 pub async fn get(
     State(state): State<AppState>,
     Extension(user): Extension<ForumUser>,
@@ -37,7 +37,7 @@ pub async fn vote(
     crate::services::moderation_service::ModerationService::assert_not_banned(user.id, &state.db).await?;
 
     // A vote is a write against the poll's topic: it must obey the same access
-    // rules as posting there — the caller can see the forum, the topic is not
+    // rules as posting there - the caller can see the forum, the topic is not
     // locked, and it is not still waiting for approval (SEC-03).
     let poll = PollService::find(poll_id, &state.db).await?;
     let topic = TopicService::get(poll.topic_id, &state.db).await?;

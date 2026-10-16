@@ -13,7 +13,7 @@ interface Props {
 
 /** Reports a post: a predefined reason (chip) picked from the admin-curated
  *  list, plus an optional free-text comment. Replaces the old single
- *  `prompt()` — no browser dialog, and the reporter now points at a category
+ *  `prompt()` - no browser dialog, and the reporter now points at a category
  *  a moderator can triage on sight instead of parsing free text every time. */
 export default function ReportPostWindow({ postId, onClose, onSent }: Props) {
   const { t } = useTranslation('forum')
@@ -23,7 +23,7 @@ export default function ReportPostWindow({ postId, onClose, onSent }: Props) {
   const [busy, setBusy] = useState(false)
 
   const selected = reasons.find(r => r.id === reasonId)
-  // A submission needs SOMETHING to tell the moderators — a picked chip, or,
+  // A submission needs SOMETHING to tell the moderators - a picked chip, or,
   // failing that, a comment. Never both empty.
   const canSubmit = !!reasonId || comment.trim().length > 0
 

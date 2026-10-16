@@ -146,7 +146,7 @@ export type ProfileFieldType = 'text' | 'textarea' | 'bool' | 'url' | 'date' | '
 export type ProfileFieldVisibility = 'public' | 'registered'
 
 /** An admin-curated custom profile field definition. Answers
- *  are always rendered as plain, escaped text — never Markdown/HTML. */
+ *  are always rendered as plain, escaped text - never Markdown/HTML. */
 export interface ProfileField {
   id: string
   key: string
@@ -161,7 +161,7 @@ export interface ProfileField {
   created_at: string
 }
 
-/** One member's answer to one field — always plain text on the wire. */
+/** One member's answer to one field - always plain text on the wire. */
 export interface ProfileFieldValue {
   user_id: string
   field_id: string
@@ -170,7 +170,7 @@ export interface ProfileFieldValue {
 
 /** One question/answer pair of the editable FAQ, admin-curated
  *  and read by every member. `answer_md` is Markdown, rendered client-side
- *  with `PostBody` — the same sanitized renderer as post bodies. */
+ *  with `PostBody` - the same sanitized renderer as post bodies. */
 export interface FaqEntry {
   id: string
   question: string
@@ -252,7 +252,7 @@ export interface Member {
 }
 
 /** A user currently online, with a best-effort readable location (their
- * current topic's title) — `null` when unknown or when the caller isn't
+ * current topic's title) - `null` when unknown or when the caller isn't
  * allowed to see that topic's forum. */
 export interface OnlineUser {
   user_id: string
@@ -372,7 +372,7 @@ export interface ModLogEntry {
 }
 export interface Warning { id: string; user_id: string; moderator_id: string; reason: string; created_at: string }
 export interface Ban { user_id: string; banned_by: string; reason: string | null; until: string | null; created_at: string }
-// IP / email bans (exact match, admin only — see services::ban_registry).
+// IP / email bans (exact match, admin only - see services::ban_registry).
 export interface IpBan { id: string; value: string; reason: string | null; banned_by: string; until: string | null; created_at: string }
 export interface EmailBan { id: string; email: string; reason: string | null; banned_by: string; until: string | null; created_at: string }
 
@@ -401,7 +401,7 @@ export interface PmThreadDetail {
   messages: PmMessage[]
 }
 
-// Ignore list — a purely client-side display preference:
+// Ignore list - a purely client-side display preference:
 // the backend keeps returning every post from an ignored member, the
 // frontend just folds them by default (`GET /me/ignored` returns bare ids).
 
@@ -623,7 +623,7 @@ export const forumApi = {
     apiClient.post<{ added: boolean; reactions: EmojiAgg[] }>(`/forum/posts/${postId}/react`, { emoji }).then(r => r.data),
   topicReactions: (topicId: string) =>
     apiClient.get<{ reactions: Record<string, EmojiAgg[]> }>(`/forum/topics/${topicId}/reactions`).then(r => r.data.reactions),
-  // Who reacted to a post, grouped by emoji — loaded on demand (hover/click
+  // Who reacted to a post, grouped by emoji - loaded on demand (hover/click
   // on a reaction chip), never for every post of a topic at once.
   postReactionUsers: (postId: string) =>
     apiClient.get<{ reactions: ReactionUsers[] }>(`/forum/posts/${postId}/reactions/users`).then(r => r.data.reactions),
@@ -747,7 +747,7 @@ export const forumApi = {
   blockPmUser: (user_id: string) => apiClient.post('/forum/me/pm/blocks', { user_id }).then(() => undefined),
   unblockPmUser: (uid: string) => apiClient.delete(`/forum/me/pm/blocks/${uid}`).then(() => undefined),
 
-  // Ignore list — display-only, see the note above.
+  // Ignore list - display-only, see the note above.
   listIgnored: () => apiClient.get<{ ignored: string[] }>('/forum/me/ignored').then(r => r.data.ignored),
   ignoreUser: (user_id: string) => apiClient.post('/forum/me/ignored', { user_id }).then(() => undefined),
   unignoreUser: (uid: string) => apiClient.delete(`/forum/me/ignored/${uid}`).then(() => undefined),

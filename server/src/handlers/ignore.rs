@@ -1,4 +1,4 @@
-//! Ignore list: `/me/ignored`. Purely a display preference — see
+//! Ignore list: `/me/ignored`. Purely a display preference - see
 //! `services/ignore_service.rs` for the security model.
 
 use axum::{
@@ -14,7 +14,7 @@ use crate::{
     services::ignore_service::IgnoreService, state::AppState,
 };
 
-/// GET /me/ignored — the caller's own ignore list.
+/// GET /me/ignored - the caller's own ignore list.
 pub async fn list(
     State(state): State<AppState>,
     Extension(user): Extension<ForumUser>,
@@ -23,7 +23,7 @@ pub async fn list(
     Ok(Json(json!({ "ignored": ignored })))
 }
 
-/// POST /me/ignored — ignores a member (idempotent).
+/// POST /me/ignored - ignores a member (idempotent).
 pub async fn add(
     State(state): State<AppState>,
     Extension(user): Extension<ForumUser>,
@@ -33,7 +33,7 @@ pub async fn add(
     Ok(StatusCode::CREATED)
 }
 
-/// DELETE /me/ignored/:uid — stops ignoring a member.
+/// DELETE /me/ignored/:uid - stops ignoring a member.
 pub async fn remove(
     State(state): State<AppState>,
     Extension(user): Extension<ForumUser>,

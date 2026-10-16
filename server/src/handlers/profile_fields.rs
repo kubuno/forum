@@ -20,7 +20,7 @@ use crate::{
 
 // ── Definitions (admin-curated) ──────────────────────────────────────────────
 
-/// GET /profile-fields — every authenticated member sees the definitions, so
+/// GET /profile-fields - every authenticated member sees the definitions, so
 /// a profile page or an edit form can render the right control for each one.
 pub async fn list_fields(State(state): State<AppState>) -> Result<Json<Value>> {
     let fields = ProfileFieldService::list_fields(&state.db).await?;
@@ -65,7 +65,7 @@ pub async fn delete_field(
 
 // ── Values (per member) ───────────────────────────────────────────────────────
 
-/// GET /me/profile-fields — the caller's own answers, alongside every
+/// GET /me/profile-fields - the caller's own answers, alongside every
 /// definition (so the edit form can render a control per field even for one
 /// the caller has never answered).
 pub async fn my_values(
@@ -77,7 +77,7 @@ pub async fn my_values(
     Ok(Json(json!({ "fields": fields, "values": values })))
 }
 
-/// PUT /me/profile-fields — set (or clear) the caller's own answers. A member
+/// PUT /me/profile-fields - set (or clear) the caller's own answers. A member
 /// may only ever write their own row: there is no `user_id` in the DTO, it
 /// always comes from the authenticated caller.
 pub async fn set_my_values(
@@ -90,7 +90,7 @@ pub async fn set_my_values(
     Ok(Json(json!({ "values": values })))
 }
 
-/// GET /users/:id/profile-fields — a member's answers, shaped for the
+/// GET /users/:id/profile-fields - a member's answers, shaped for the
 /// profile page: only the (field, value) pairs the viewer is allowed to see,
 /// and only for fields that actually have an answer.
 pub async fn user_values(

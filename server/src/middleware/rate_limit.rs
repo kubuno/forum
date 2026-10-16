@@ -15,7 +15,7 @@ use uuid::Uuid;
 
 use crate::{errors::ForumError, middleware::ForumUser, state::AppState};
 
-/// A single-key GCRA limiter — one token bucket.
+/// A single-key GCRA limiter - one token bucket.
 type UserBucket = RateLimiter<NotKeyed, InMemoryState, DefaultClock>;
 
 /// Per-user write rate limiting (SEC-09).

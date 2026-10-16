@@ -4,7 +4,7 @@
 //! invisible forever, their authors never learn what happened, and the counter
 //! on the moderation entry stops meaning anything. The retention window comes
 //! from the admin console (`forum.pending_retention_days`), is re-read on every
-//! pass, and `0` turns the sweep off — an administrator must be able to say
+//! pass, and `0` turns the sweep off - an administrator must be able to say
 //! "nothing is ever discarded automatically".
 //!
 //! Only UNAPPROVED rows are touched. Nothing published is ever at risk here, and

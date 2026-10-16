@@ -9,7 +9,7 @@ import { AuthorName, AuthorAvatar } from './Author'
 
 /** Detailed "who's online" page: every active user, with their current
  * location when the caller is allowed to see it (see `online_detailed` on
- * the backend — a restricted forum's topic never leaks through here). */
+ * the backend - a restricted forum's topic never leaks through here). */
 export default function WhosOnlinePage() {
   const { t } = useTranslation('forum')
   const navigate = useNavigate()

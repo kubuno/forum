@@ -65,7 +65,7 @@ pub struct AssignRankDto {
     pub rank_id: Option<Uuid>,
 }
 
-/// PATCH /profiles/:uid/rank — admin only. Sets a user's manually-assigned
+/// PATCH /profiles/:uid/rank - admin only. Sets a user's manually-assigned
 /// SPECIAL rank (`RankService::assign_special` rejects a non-special one).
 pub async fn assign_rank(
     State(state): State<AppState>,
@@ -86,8 +86,8 @@ pub async fn assign_rank(
 ///
 /// Refusing to SAVE a signature is not enough: an instance that switches them
 /// off would keep displaying every signature written before the change under
-/// every message their authors ever posted. The stored text is left alone —
-/// turning the setting back on restores it — it simply stops being served.
+/// every message their authors ever posted. The stored text is left alone -
+/// turning the setting back on restores it - it simply stops being served.
 fn apply_signature_policy(profile: &mut UserProfile, allowed: bool) {
     if !allowed {
         profile.signature_md = None;
@@ -107,7 +107,7 @@ pub struct BriefQuery {
     pub ids: Option<String>,
 }
 
-/// GET /profiles/brief?ids=uid1,uid2 — compact profiles for a post listing's
+/// GET /profiles/brief?ids=uid1,uid2 - compact profiles for a post listing's
 /// author column, resolved in one request instead of one per author.
 pub async fn brief_profiles(
     State(state): State<AppState>,
@@ -127,7 +127,7 @@ pub async fn brief_profiles(
     Ok(Json(json!({ "profiles": profiles })))
 }
 
-/// GET /profiles/:uid/activity — a user's recent posts.
+/// GET /profiles/:uid/activity - a user's recent posts.
 pub async fn activity(State(state): State<AppState>, Path(uid): Path<Uuid>) -> Result<Json<Value>> {
     let posts = RankService::activity(uid, 20, &state.db).await?;
     Ok(Json(json!({ "posts": posts })))

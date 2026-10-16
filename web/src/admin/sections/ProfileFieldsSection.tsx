@@ -2,11 +2,11 @@
 // EAV set every member can fill in.
 //
 // Every answer a member gives to one of these fields is shown on their
-// profile as plain, escaped text — never Markdown/HTML (see ProfilePage.tsx)
-// — so there is nothing here for the admin's `options` list or a member's own
+// profile as plain, escaped text - never Markdown/HTML (see ProfilePage.tsx)
+// - so there is nothing here for the admin's `options` list or a member's own
 // answer to inject. Editing happens IN PLACE, like every other section on
 // this page: adding opens an inline form row, editing swaps a row's display
-// for the same form pre-filled — never a modal.
+// for the same form pre-filled - never a modal.
 
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'

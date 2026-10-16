@@ -15,7 +15,7 @@ use crate::{
     state::AppState,
 };
 
-/// GET /faq — every authenticated member reads the FAQ; there is nothing
+/// GET /faq - every authenticated member reads the FAQ; there is nothing
 /// sensitive in it, only an admin may change it.
 pub async fn list(State(state): State<AppState>) -> Result<Json<Value>> {
     let entries = FaqService::list(&state.db).await?;

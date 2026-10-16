@@ -14,7 +14,7 @@ export default function ReactionBar({ postId, initial }: { postId: string; initi
   const [aggs, setAggs] = useState<EmojiAgg[]>(initial)
   const [pickerPos, setPickerPos] = useState<{ left: number; bottom: number } | null>(null)
   // "Who reacted" is resolved lazily on first hover/click of any chip on this
-  // post, not for every post of the topic up front — `null` until then.
+  // post, not for every post of the topic up front - `null` until then.
   const [reactionUsers, setReactionUsers] = useState<Record<string, string[]> | null>(null)
   const [loadingUsers, setLoadingUsers] = useState(false)
 

@@ -22,7 +22,7 @@ pub struct FeedQuery {
     pub offset: Option<i64>,
 }
 
-/// GET /feed — cross-forum topic discovery, decorated with tags.
+/// GET /feed - cross-forum topic discovery, decorated with tags.
 pub async fn feed(
     State(state): State<AppState>,
     Extension(user): Extension<ForumUser>,

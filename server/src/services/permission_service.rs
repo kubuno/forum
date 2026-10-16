@@ -138,7 +138,7 @@ impl PermissionService {
 
     /// Whether a role's per-forum permission row grants `can_view`, defaulting to
     /// true when no row is configured. Used to decide, without knowing a third
-    /// party's role, whether a forum is open to ordinary members at all — e.g.
+    /// party's role, whether a forum is open to ordinary members at all - e.g.
     /// before notifying a mentioned user (SEC-11).
     pub async fn role_can_view(forum_id: Uuid, role: &str, db: &DbPool) -> Result<bool> {
         let row: Option<bool> = db

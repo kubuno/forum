@@ -2,13 +2,13 @@
 //!
 //! SECURITY MODEL. Feed readers cannot log in, so the anonymous
 //! `/public/feeds/:token/...` routes authenticate with an unguessable token in
-//! the URL — the same capability-token pattern the calendar module uses for its
+//! the URL - the same capability-token pattern the calendar module uses for its
 //! ICS feed. Two rules keep this from leaking anything:
 //!
 //!  1. A feed only ever contains topics its OWNER may see. Visibility is decided
 //!     by the very same `PermissionService::push_visible_forum` used everywhere
-//!     else, and the owner is always evaluated as an ORDINARY MEMBER — never an
-//!     administrator — so a feed can never surface more than a normal member of
+//!     else, and the owner is always evaluated as an ORDINARY MEMBER - never an
+//!     administrator - so a feed can never surface more than a normal member of
 //!     that account would see in the app (a strictly conservative choice).
 //!  2. There is deliberately NO token-less anonymous feed. This is a self-hosted
 //!     workspace with no "guest" role; exposing member-visible content to the
@@ -40,14 +40,14 @@ impl FeedService {
         base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes)
     }
 
-    /// `POST /me/feed-tokens` — creates a feed URL for the caller.
+    /// `POST /me/feed-tokens` - creates a feed URL for the caller.
     pub async fn create_token(user_id: Uuid, label: Option<String>, db: &DbPool) -> Result<FeedToken> {
         let token = Self::new_token();
         let label = label.and_then(|l| {
             let t = l.trim().to_string();
             if t.is_empty() { None } else { Some(t) }
         });
-        // `token` is the natural (text) primary key, minted above; no RETURNING —
+        // `token` is the natural (text) primary key, minted above; no RETURNING -
         // reselect the row after inserting it.
         db.execute(
             "INSERT INTO forum.feed_tokens (token, user_id, label) VALUES ($1, $2, $3)",
@@ -67,7 +67,7 @@ impl FeedService {
         .map_err(Into::into)
     }
 
-    /// `GET /me/feed-tokens` — the caller's own tokens, newest first.
+    /// `GET /me/feed-tokens` - the caller's own tokens, newest first.
     pub async fn list_tokens(user_id: Uuid, db: &DbPool) -> Result<Vec<FeedToken>> {
         let rows = db
             .fetch_all_as::<FeedToken>(
@@ -81,7 +81,7 @@ impl FeedService {
         Ok(rows)
     }
 
-    /// `DELETE /me/feed-tokens/:token` — revokes one. Keyed on `user_id`, so a
+    /// `DELETE /me/feed-tokens/:token` - revokes one. Keyed on `user_id`, so a
     /// member can only ever revoke a token they own.
     pub async fn revoke_token(user_id: Uuid, token: &str, db: &DbPool) -> Result<()> {
         db.execute(
@@ -93,7 +93,7 @@ impl FeedService {
     }
 
     /// Resolves a feed token to its owner and stamps `last_used_at`. Returns
-    /// `None` for an unknown token — the public handler then answers 404, never
+    /// `None` for an unknown token - the public handler then answers 404, never
     /// distinguishing "no such token" from any other miss.
     pub async fn resolve(token: &str, db: &DbPool) -> Result<Option<Uuid>> {
         // No `UPDATE ... RETURNING` (MySQL lacks it): resolve first, then stamp
@@ -115,10 +115,10 @@ impl FeedService {
     }
 
     /// The most recent topics the owner may currently see (approved, not
-    /// deleted), across every forum visible to them — evaluated as an ordinary
+    /// deleted), across every forum visible to them - evaluated as an ordinary
     /// member. Capped at 30.
     pub async fn recent_topics_for(state: &AppState, user_id: Uuid) -> Result<Vec<FeedEntry>> {
-        // Conservative viewer: the token owner as a plain member, never admin —
+        // Conservative viewer: the token owner as a plain member, never admin -
         // but carrying their real groups so the feed honours the same additive
         // per-group grants the app does.
         let group_ids = directory::user_group_ids(state, user_id).await;
@@ -168,7 +168,7 @@ impl FeedService {
         out
     }
 
-    /// `{base}/forum/topics/{id}` — an absolute link when the request carried a
+    /// `{base}/forum/topics/{id}` - an absolute link when the request carried a
     /// host, a root-relative one otherwise (still valid inside the shell).
     fn topic_link(base: &str, topic_id: Uuid) -> String {
         format!("{base}/forum/topics/{topic_id}")

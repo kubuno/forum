@@ -1,6 +1,6 @@
 //! Runs the forum module's own migrations and the primitives the kubuno-db port
 //! changed against a real server of **each** engine, from a single compiled
-//! binary — the proof that the engine is a run-time choice, not a build-time
+//! binary - the proof that the engine is a run-time choice, not a build-time
 //! one.
 //!
 //! The suite issues the very SQL the services issue (ids generated in Rust,

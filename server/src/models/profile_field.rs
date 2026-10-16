@@ -5,14 +5,14 @@ use uuid::Uuid;
 use validator::{Validate, ValidationError};
 
 /// The allowed field kinds ("custom profile fields", kept
-/// intentionally small — no numeric/checkbox-group/etc.).
+/// intentionally small - no numeric/checkbox-group/etc.).
 const FIELD_TYPES: &[&str] = &["text", "textarea", "bool", "url", "date", "dropdown"];
 const VISIBILITIES: &[&str] = &["public", "registered"];
 
 /// An admin-curated custom profile field definition. Answers are ALWAYS
 /// rendered as plain, escaped text at display time (see
-/// `services::profile_field_service::values_for_display`) — never Markdown or
-/// HTML — so a member's own input can never inject anything into another
+/// `services::profile_field_service::values_for_display`) - never Markdown or
+/// HTML - so a member's own input can never inject anything into another
 /// member's view of their profile.
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct ProfileField {
@@ -76,7 +76,7 @@ fn validate_visibility(visibility: &str) -> Result<(), ValidationError> {
 /// at most 50 choices, each 1..200 characters once trimmed. The per-value
 /// membership check (a submitted answer must be one of these) happens in the
 /// service, against the field's *stored* options, not this DTO. The field
-/// this validates is `Option<Vec<String>>` — `None` (option omitted) is
+/// this validates is `Option<Vec<String>>` - `None` (option omitted) is
 /// always fine, the service decides afterwards whether the *merged*
 /// `field_type` actually required one.
 fn validate_field_options(options: &[String]) -> Result<(), ValidationError> {
@@ -105,7 +105,7 @@ pub struct CreateProfileFieldDto {
     #[validate(custom(function = "validate_field_type"))]
     pub field_type: String,
     /// Required (and non-empty) when `field_type == "dropdown"`, ignored
-    /// (and cleared) otherwise — enforced in the service, since it depends on
+    /// (and cleared) otherwise - enforced in the service, since it depends on
     /// another field of this same DTO.
     #[serde(default)]
     #[validate(custom(function = "validate_field_options"))]
@@ -122,7 +122,7 @@ pub struct CreateProfileFieldDto {
 }
 
 /// A full replacement of an existing field's definition (the admin UI edits
-/// the whole record in place, like `ForumEditWindow` does for forums) — every
+/// the whole record in place, like `ForumEditWindow` does for forums) - every
 /// field is optional here only so a caller may omit one it did not change;
 /// the service merges onto the existing row rather than doing a SQL
 /// `COALESCE`, so it can re-derive `options` from the *final* `field_type`.
@@ -165,7 +165,7 @@ fn validate_values(values: &[ProfileFieldValueInput]) -> Result<(), ValidationEr
 
 /// Body of `PUT /me/profile-fields`: the caller's own answers, one per field
 /// they are setting (an omitted `field_id` keeps its previously stored
-/// value untouched — see `ProfileFieldService::set_values`).
+/// value untouched - see `ProfileFieldService::set_values`).
 #[derive(Debug, Deserialize, Validate)]
 pub struct SetProfileValuesDto {
     #[validate(custom(function = "validate_values"))]

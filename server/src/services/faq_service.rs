@@ -41,8 +41,8 @@ impl FaqService {
         .map_err(Into::into)
     }
 
-    /// Merges only the fields the caller sent — `COALESCE` against the
-    /// existing row — and always bumps `updated_at`.
+    /// Merges only the fields the caller sent - `COALESCE` against the
+    /// existing row - and always bumps `updated_at`.
     pub async fn update(id: Uuid, dto: UpdateFaqDto, db: &DbPool) -> Result<FaqEntry> {
         let affected = db
             .execute(

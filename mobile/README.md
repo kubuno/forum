@@ -1,4 +1,4 @@
-# Kubuno Forum — mobile apps
+# Kubuno Forum - mobile apps
 
 Reserved for the mobile clients of the Forum module, organised like the other platforms of this repository:
 

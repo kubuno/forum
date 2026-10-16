@@ -26,8 +26,8 @@ impl NotificationService {
         }
 
         // Fold high-volume, topic-scoped kinds into the recipient's existing
-        // unread notification for the same topic — bumping it to the top and
-        // counting one more responder — instead of stacking a new row. Exactly
+        // unread notification for the same topic - bumping it to the top and
+        // counting one more responder - instead of stacking a new row. Exactly
         // one row is touched (the most recent open one).
         if matches!(kind, "reply" | "reaction") {
             // No portable UPDATE ... RETURNING (MySQL has none): find the target
@@ -75,7 +75,7 @@ impl NotificationService {
         }
     }
 
-    /// Like [`notify`], for events not tied to a topic — a warning, a ban, or a
+    /// Like [`notify`], for events not tied to a topic - a warning, a ban, or a
     /// rejected contribution whose topic no longer exists. Stored with a null
     /// `topic_id`, so it cannot be cascade-deleted with a topic and the bell
     /// renders it as a plain entry with nothing to open.
@@ -105,7 +105,7 @@ impl NotificationService {
     /// (or unavailable) directory lookup never delays the caller: `notify`
     /// returns as soon as the row is written. Naming the actor requires a
     /// round trip to the core's directory (best-effort, short-timeout,
-    /// short-TTL cached — see [`directory::display_name`]); on any failure we
+    /// short-TTL cached - see [`directory::display_name`]); on any failure we
     /// fall back to the generic, kind-based title so a native (mobile) push is
     /// still never blank.
     async fn push(state: &AppState, recipient: Uuid, id: Uuid, kind: &str, topic_id: Option<Uuid>, actor: Uuid) {
@@ -195,7 +195,7 @@ impl NotificationService {
     /// having just been added to a new thread), through the same shared bell
     /// as the board notifications. Deliberately narrower than [`notify`]: a
     /// PM thread has no `topic_id` (it isn't a `forum.topics` row, so it
-    /// cannot go through the FK-checked `topic_id` column — see migration
+    /// cannot go through the FK-checked `topic_id` column - see migration
     /// `000013`), and the push body must NEVER carry the message text, only
     /// the fact that one arrived. `thread_id` is kept in `extra` purely for
     /// operators reading the raw table; nothing renders it back as content.
@@ -220,7 +220,7 @@ impl NotificationService {
 
     /// Like [`push`], but for private messages: the link points at the PM
     /// thread instead of a topic, and the body is a fixed, content-free
-    /// string — never the message the sender wrote.
+    /// string - never the message the sender wrote.
     async fn push_pm(state: &AppState, recipient: Uuid, id: Uuid, actor: Uuid, thread_id: Uuid) {
         let url = format!("{}/internal/events/publish", state.settings.core.url);
         let secret = state.settings.core.internal_secret.clone();

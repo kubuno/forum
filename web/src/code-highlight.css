@@ -1,7 +1,7 @@
 /* Syntax highlighting for fenced code blocks, rendered via rehype-highlight
  * (highlight.js token classes, e.g. `.hljs-keyword`). Scoped to the forum
  * module area only, kept sober and legible in both light and dark
- * (`prefers-color-scheme`) — the forum module has no app-wide dark theme yet,
+ * (`prefers-color-scheme`) - the forum module has no app-wide dark theme yet,
  * so this stays self-contained rather than depending on tokens that don't exist. */
 
 [data-module="forum"] .hljs {
