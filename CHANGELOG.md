@@ -318,8 +318,8 @@ number at release time, and CI publishes that section as the GitHub Release note
   their messages, honouring both the board-wide "signatures allowed" setting and
   each reader's own "show signatures" preference - until now it was stored but
   never rendered.
-- **Member profiles you can actually open.** Every member now has a profile page
-  - avatar, rank, join date, post and topic counts, likes, an "about" section and
+- **Member profiles you can actually open.** Every member now has a profile page -
+  avatar, rank, join date, post and topic counts, likes, an "about" section and
   their recent topics - reachable by clicking an author beside any message.
 - **A members directory.** A new Members page lists everyone who takes part,
   sortable by most posts, newest, or recently active, and paginated; it is linked

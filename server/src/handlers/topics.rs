@@ -151,8 +151,8 @@ async fn assert_topic_moderator(topic_id: Uuid, user: &ForumUser, state: &AppSta
 }
 
 /// The caller must moderate this specific forum. Used to guard the *other* side
-/// of a move/split/merge - the forum a topic lands in, or the one a merge empties
-/// - which the source-topic check alone never covers (SEC-05).
+/// of a move/split/merge - the forum a topic lands in, or the one a merge empties -
+/// which the source-topic check alone never covers (SEC-05).
 async fn assert_forum_moderator(forum_id: Uuid, user: &ForumUser, state: &AppState) -> Result<()> {
     let perms = PermissionService::effective(forum_id, user, &state.db).await?;
     if perms.is_admin || perms.is_moderator { Ok(()) } else { Err(ForumError::Forbidden) }
